@@ -1,11 +1,12 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/authStore'; // Usando el alias
+import { ENDPOINTS } from './endpoints';
 
 // NOTA IMPORTANTE SOBRE LA URL:
 // 1. Emulador Android: Usa 'http://10.0.2.2:8000/api/' (apunta al localhost de tu PC).
 // 2. Dispositivo Físico (USB/WiFi): Usa tu IP local, ej: 'http://192.168.1.15:8000/api/'.
 // 3. Emulador iOS: Usa 'http://localhost:8000/api/'.
-const API_URL = 'http://10.0.2.2:8000/api/'; 
+const API_URL = 'http://10.0.2.2:8000/api/v1/'; 
 
 const client = axios.create({
   baseURL: API_URL,
@@ -14,28 +15,45 @@ const client = axios.create({
   },
 });
 
-// --- INTERCEPTOR DE REQUEST ---
-// Se ejecuta ANTES de que salga cada petición.
-client.interceptors.request.use((config) => {
-  // Usamos .getState() para leer el store sin estar dentro de un componente React.
-  // Esto evita bucles y permite acceder al token desde cualquier archivo JS/TS.
-  const token = useAuthStore.getState().token;
-  
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
 
-// --- INTERCEPTOR DE RESPONSE ---
-// Se ejecuta CUANDO recibimos una respuesta (o error).
+// 1. Interceptor de Request: Inyecta el Access Token actual. Se ejecuta ANTES de que salga cada petición.
 client.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // Si el backend devuelve 401 (Unauthorized), significa que el token venció o es inválido.
-    if (error.response?.status === 401) {
-      console.warn('Sesión expirada o inválida (401). Cerrando sesión...');
-      useAuthStore.getState().signOut();
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Si el error es 401 (No autorizado) y no es un reintento
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true; // Marcamos para no entrar en bucle infinito
+
+      try {
+        // Obtenemos el refresh token del store
+        const refreshToken = useAuthStore.getState().refreshToken;
+        
+        if (!refreshToken) {
+            throw new Error('No hay refresh token disponible');
+        }
+
+        // Llamamos al endpoint de refresh (usamos axios puro para evitar interceptores circulares)
+        const response = await axios.post(`${API_URL}${ENDPOINTS.AUTH.REFRESH}`, {
+          refresh: refreshToken
+        });
+
+        const newAccessToken = response.data.access;
+
+        // Guardamos el nuevo token en el store
+        await useAuthStore.getState().setAccessToken(newAccessToken);
+
+        // Actualizamos el header de la petición original y reintentamos
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return client(originalRequest);
+
+      } catch (refreshError) {
+        // Si el refresh falla (token vencido o inválido), cerramos sesión
+        console.log('Sesión expirada, cerrando sesión...');
+        useAuthStore.getState().signOut();
+        return Promise.reject(refreshError);
+      }
     }
     return Promise.reject(error);
   }

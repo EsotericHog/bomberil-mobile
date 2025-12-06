@@ -10,14 +10,18 @@ import {
   ActivityIndicator,
   TouchableWithoutFeedback,
   Keyboard,
-  StatusBar
+  StatusBar,
+  Alert
 } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
-import { Feather } from '@expo/vector-icons'; // Iconos vectoriales incluidos en Expo
+import client from '@/api/client'; // Importamos el cliente configurado
+import { Feather } from '@expo/vector-icons'; 
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AxiosError } from 'axios';
+import { ENDPOINTS } from '@/api/endpoints';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [rut, setRut] = useState(''); // Cambiado de email a rut
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -25,22 +29,74 @@ export default function LoginScreen() {
   const { signIn } = useAuthStore();
 
   const handleLogin = async () => {
-    if (!email || !password) return; // Validación básica
+    if (!rut || !password) {
+        Alert.alert('Faltan datos', 'Por favor ingresa tu credencial y contraseña');
+        return;
+    }
+    
     Keyboard.dismiss();
     setLoading(true);
     
     try {
-      // DATOS SIMULADOS (Reemplazar con llamada real a API)
-      const fakeToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
-      const fakePermissions = ['accion_ver_inventario', 'accion_ajustar_stock'];
+      // 1. PETICIÓN REAL AL BACKEND
+      // Enviamos 'username' porque SimpleJWT espera ese campo por defecto (aunque sea un RUT) -> REVISAR
+      const response = await client.post(ENDPOINTS.AUTH.LOGIN, {
+        rut: rut, // Django espera 'username' aunque le mandes el RUT
+        password: password
+      });
+
+      const data = response.data;
+
+      // VALIDACIÓN DE SEGURIDAD FRONTEND:
+      // Aunque el backend no falle, si por alguna razón devuelve data sin estación,
+      // bloqueamos el ingreso aquí mismo.
+      if (!data.estacion || !data.permisos || data.permisos.length === 0) {
+        Alert.alert(
+          'Acceso Denegado', 
+          'Tu usuario no tiene una membresía activa en ninguna estación. Contacta a tu oficial a cargo.'
+        );
+        // No llamamos a signIn(), por lo que no entra al sistema.
+        return; 
+      }
       
-      // Simulamos delay de red de 1.5s para ver la animación de carga
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      await signIn(fakeToken, fakePermissions); 
+      // 2. INICIAR SESIÓN EN EL STORE
+      // data debe coincidir con la interfaz LoginResponse del store
+      await signIn(data); 
+
     } catch (error) {
-      console.error(error);
-      alert('Error de conexión o credenciales inválidas');
+      const err = error as AxiosError<any>;
+      console.log("Error Login RAW:", err.response?.data); // Útil para ver qué llega exactamente
+
+      let mensaje = 'No se pudo conectar con el servidor';
+      
+      if (err.response?.data) {
+        const data = err.response.data;
+
+        // CASO 1: El backend envía 'detail' (común en 403/401)
+        if (data.detail) {
+          // AQUÍ ESTABA EL ERROR: Verificamos si es Array antes de asignarlo
+          mensaje = Array.isArray(data.detail) ? data.detail[0] : String(data.detail);
+        } 
+        // CASO 2: El backend envía errores de campo (ej: { "rut": ["Este campo es requerido"] })
+        else if (typeof data === 'object') {
+            const keys = Object.keys(data);
+            if (keys.length > 0) {
+                const firstKey = keys[0]; // Ej: "rut"
+                const firstError = data[firstKey]; // Ej: ["Error..."]
+                const errorTexto = Array.isArray(firstError) ? firstError[0] : String(firstError);
+                mensaje = `${firstKey.toUpperCase()}: ${errorTexto}`;
+            }
+        }
+      } else {
+        // Fallbacks por código de estado si el body viene vacío
+        if (err.response?.status === 401) mensaje = 'Credenciales incorrectas';
+        else if (err.response?.status === 403) mensaje = 'Acceso prohibido';
+        else if (err.response?.status === 404) mensaje = 'Servidor no encontrado';
+        else if (err.response && err.response.status >= 500) mensaje = 'Error interno del servidor';
+      }
+
+      // Ahora 'mensaje' es 100% seguro un string
+      Alert.alert('Error de Acceso', mensaje);
     } finally {
       setLoading(false);
     }
@@ -60,8 +116,6 @@ export default function LoginScreen() {
             {/* --- SECCIÓN LOGO --- */}
             <View className="items-center mb-10">
               <View className="bg-white p-2 rounded-full shadow-lg mb-4">
-                {/* REEMPLAZA require... con tu logo real */}
-                {/* Si tienes el archivo en assets: require('../../../assets/logo.png') */}
                 <Image 
                   source={require('../../../assets/bomberil_logo.png')}
                   className="w-24 h-24 rounded-full" 
@@ -79,7 +133,7 @@ export default function LoginScreen() {
             {/* --- TARJETA DE FORMULARIO --- */}
             <View className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
               
-              {/* Input Usuario */}
+              {/* Input RUT / Credencial */}
               <View className="mb-4 space-y-2">
                 <Text className="text-gray-600 font-bold ml-1 text-xs uppercase tracking-wider">
                   Credencial / RUT
@@ -90,10 +144,10 @@ export default function LoginScreen() {
                     className="flex-1 ml-3 text-gray-800 font-medium text-base"
                     placeholder="Ej. 12.345.678-9"
                     placeholderTextColor="#d1d5db"
-                    value={email}
-                    onChangeText={setEmail}
+                    value={rut}
+                    onChangeText={setRut} // Actualiza estado rut
                     autoCapitalize="none"
-                    keyboardType="email-address"
+                    // keyboardType="email-address" // Opcional: Quitar si prefieres teclado normal
                   />
                 </View>
               </View>
