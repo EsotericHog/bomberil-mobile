@@ -38,14 +38,23 @@ client.interceptors.response.use(
         const response = await axios.post(`${API_URL}${ENDPOINTS.AUTH.REFRESH}`, {
           refresh: refreshToken
         });
-
-        const newAccessToken = response.data.access;
+        
+        // Obtener datos de la respuesta del servidor
+        const newData = response.data;
 
         // Guardamos el nuevo token en el store
-        await useAuthStore.getState().setAccessToken(newAccessToken);
+        await useAuthStore.getState().setAccessToken(newData.access);
+
+        // BONUS: Actualizamos también los permisos/estación en el store silenciosamente
+        // Esto mantiene la app al día incluso sin reiniciar
+        useAuthStore.setState({
+            user: newData.usuario,
+            estacion: newData.estacion,
+            userPermissions: newData.permisos
+        });
 
         // Actualizamos el header de la petición original y reintentamos
-        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        originalRequest.headers.Authorization = `Bearer ${newData.access}`;
         return client(originalRequest);
 
       } catch (refreshError) {

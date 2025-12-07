@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { jwtDecode } from 'jwt-decode';
 import { tokenStorage } from '@/utils/storage';
 import client from '@/api/client';
+import { ENDPOINTS } from '@/api/endpoints';
 
 // 1. Definimos la estructura del JWT (Payload)
 interface UsuarioData {
@@ -115,41 +116,72 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
 
-      // Decodificación simple para restauración optimista
-      // (Aquí podrías agregar lógica para verificar si el token expiró y llamar al refresh automáticamente)
-      const decoded = jwtDecode<TokenPayload>(token);
-      const isExpired = decoded.exp ? (Date.now() / 1000) > decoded.exp : true;
+      // 2. Lo ponemos en el estado temporalmente para que el interceptor de axios lo use
+      set({ token });
 
-      if (isExpired) {
-        await get().signOut();
-        set({ isLoading: false });
-        return;
-      }
+      // 3. Llamamos a AUTH/ME para validar si el token sigue vivo 
+      // y obtener DATOS FRESCOS del backend.
+      const response = await client.get(ENDPOINTS.AUTH.ME);
 
-      // RESTAURACIÓN OPTIMISTA:
-      // Como el token tiene tus claims personalizados (rut, nombre), 
-      // podemos restaurar una sesión básica sin llamar a la API inmediatamente.
-      // NOTA: Para recuperar 'permisos' y 'avatar' real, deberías llamar a un endpoint 
-      // tipo '/auth/me/' aquí, pero por ahora usaremos los datos del token.
-      
-      const userRestored = {
-        id: decoded.user_id,
-        rut: decoded.rut || '',
-        nombre_completo: decoded.nombre || '',
-        email: '',
-        avatar: null
-      };
+      // NOTA: Gracias al interceptor de refresh, si el token estaba vencido,
+      // client.ts ya lo refrescó internamente antes de llegar aquí.
 
+      const data = response.data; // { usuario, estacion, permisos, membresia_id }
+
+      // 4. Actualizamos el store con la verdad absoluta del servidor
       set({ 
-        token, 
-        user: userRestored, 
-        isAuthenticated: true, 
+        user: data.usuario,
+        estacion: data.estacion,
+        userPermissions: data.permisos,
+        isAuthenticated: true,
         isLoading: false 
       });
-
-    } catch (e) {
-      console.error('Error restaurando sesión:', e);
-      set({ token: null, isAuthenticated: false, isLoading: false });
+    } catch (error) {
+      console.log('Error restaurando sesión (Token inválido o sin internet):', error);
+      
+      // Si falla auth/me (ej. 401 definitivo, usuario borrado, membresía revocada), 
+      // limpiamos todo y mandamos al Login.
+      await get().signOut();
+      set({ isLoading: false });
     }
   },
 }));
+
+//      // Decodificación simple para restauración optimista
+//      // (Aquí podrías agregar lógica para verificar si el token expiró y llamar al refresh automáticamente)
+//      const decoded = jwtDecode<TokenPayload>(token);
+//      const isExpired = decoded.exp ? (Date.now() / 1000) > decoded.exp : true;
+//
+//      if (isExpired) {
+//        await get().signOut();
+//        set({ isLoading: false });
+//        return;
+//      }
+//
+//      // RESTAURACIÓN OPTIMISTA:
+//      // Como el token tiene tus claims personalizados (rut, nombre), 
+//      // podemos restaurar una sesión básica sin llamar a la API inmediatamente.
+//      // NOTA: Para recuperar 'permisos' y 'avatar' real, deberías llamar a un endpoint 
+//      // tipo '/auth/me/' aquí, pero por ahora usaremos los datos del token.
+//      
+//      const userRestored = {
+//        id: decoded.user_id,
+//        rut: decoded.rut || '',
+//        nombre_completo: decoded.nombre || '',
+//        email: '',
+//        avatar: null
+//      };
+//
+//      set({ 
+//        token, 
+//        user: userRestored, 
+//        isAuthenticated: true, 
+//        isLoading: false 
+//      });
+//
+//    } catch (e) {
+//      console.error('Error restaurando sesión:', e);
+//      set({ token: null, isAuthenticated: false, isLoading: false });
+//    }
+//  },
+//}));
