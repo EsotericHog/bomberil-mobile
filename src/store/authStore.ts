@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { jwtDecode } from 'jwt-decode';
 import { tokenStorage } from '@/utils/storage';
 import client from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
@@ -90,15 +89,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   // --- ACCIÓN: CERRAR SESIÓN ---
   signOut: async () => {
-    await tokenStorage.removeToken();
-    set({ 
-      token: null, 
-      refreshToken: null, 
-      user: null, 
-      estacion: null, 
-      isAuthenticated: false, 
-      userPermissions: [] 
-    });
+    try {
+      // 1. Obtener el refresh token actual del estado
+      const refreshToken = get().refreshToken;
+
+      if (refreshToken) {
+        // 2. Avisar al backend para blacklisting (Fire and forget)
+        // Usamos client.post. Si falla (ej. sin internet), no importa,
+        // procedemos a borrar localmente igual para que el usuario pueda salir.
+        await client.post(ENDPOINTS.AUTH.LOGOUT, {
+            refresh: refreshToken
+        });
+      }
+    } catch (error) {
+      console.log("Error notificando logout al servidor (posiblemente offline)", error);
+    } finally {
+      // 3. SIEMPRE borrar datos locales y limpiar estado
+      await tokenStorage.removeToken();
+      // Si implementaste setRefreshToken en storage, bórralo aquí también
+
+      set({ 
+        token: null, 
+        refreshToken: null, 
+        user: null, 
+        estacion: null, 
+        isAuthenticated: false, 
+        userPermissions: [] 
+      });
+    }
   },
 
   // --- HELPER: VERIFICAR PERMISOS ---

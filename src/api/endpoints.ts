@@ -3,6 +3,7 @@ export const ENDPOINTS = {
     LOGIN: 'auth/login/',
     REFRESH: 'auth/refresh/',
     ME: 'auth/me/',
+    LOGOUT: 'auth/logout/',
   },
   INVENTARIO: {
     PRODUCTOS: 'inventario/productos/',
