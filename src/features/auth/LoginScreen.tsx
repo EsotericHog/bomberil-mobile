@@ -30,23 +30,7 @@ export default function LoginScreen({ navigation }: Props) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  
-  const { signIn, isBiometricEnabled, loginWithBiometrics } = useAuthStore();
-
-  // Efecto para sugerir huella al abrir la pantalla (Opcional, muy pro)
-  React.useEffect(() => {
-    if (isBiometricEnabled) handleBiometricLogin();
-  }, []);
-
-
-  const handleBiometricLogin = async () => {
-    setLoading(true);
-    const success = await loginWithBiometrics();
-    setLoading(false);
-    if (!success) {
-      // Opcional: Mostrar toast o vibrar si falló
-    }
-  };
+  const { signIn } = useAuthStore();
 
 
   const handleLogin = async () => {
@@ -226,17 +210,6 @@ export default function LoginScreen({ navigation }: Props) {
                   </>
                 )}
               </TouchableOpacity>
-
-              {/* --- NUEVO BOTÓN BIOMÉTRICO --- */}
-              {isBiometricEnabled && (
-                <TouchableOpacity 
-                  onPress={handleBiometricLogin}
-                  className="mt-6 flex-row justify-center items-center p-3 bg-gray-50 rounded-xl border border-gray-200"
-                >
-                  <MaterialIcons name="fingerprint" size={24} color="#b91c1c" />
-                  <Text className="ml-2 text-gray-700 font-bold">Ingresar con Huella</Text>
-                </TouchableOpacity>
-              )}
 
             </View>
 
