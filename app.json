@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "bomberil-mobile",
+    "name": "Bomberil Mobile",
     "slug": "bomberil-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/bomberil_logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -26,7 +26,13 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Permitir usar reconocimiento facial para ingresar rápidamente."
+        }
+      ]
     ]
   }
 }

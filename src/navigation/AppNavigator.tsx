@@ -33,7 +33,7 @@ export const AppNavigator = () => {
       <Stack.Screen 
         name="MiPerfil" 
         component={PerfilScreen} 
-        options={{ title: 'Mi Hoja de Vida' }} 
+        options={{ headerShown: false }}
       />
       {/* Agrega las demás rutas aquí a medida que las crees */}
     </Stack.Navigator>
