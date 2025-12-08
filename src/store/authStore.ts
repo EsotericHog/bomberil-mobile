@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { tokenStorage } from '@/utils/storage';
 import client from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
+import * as LocalAuthentication from 'expo-local-authentication';
 
 // 1. Definimos la estructura del JWT (Payload)
 interface UsuarioData {
@@ -45,12 +46,21 @@ interface AuthState {
   userPermissions: string[];
   isLoading: boolean;
 
+  // Estados biométricos
+  isBiometricSupported: boolean;
+  isBiometricEnabled: boolean;
+
   // Acciones
   signIn: (data: LoginResponse) => Promise<void>;
   signOut: () => Promise<void>;
   setAccessToken: (newToken: string) => Promise<void>;
   hasPermission: (perm: string) => boolean;
   restoreSession: () => Promise<void>;
+
+  //Acciones biométricas
+  checkBiometrics: () => Promise<void>;
+  toggleBiometrics: (enabled: boolean) => Promise<boolean>;
+  promptBiometrics: () => Promise<boolean>;
 }
 
 
@@ -63,6 +73,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   userPermissions: [],
   isLoading: true,
+  isBiometricSupported: false,
+  isBiometricEnabled: false,
 
   // --- ACCIÓN: INICIAR SESIÓN ---
   signIn: async (data: LoginResponse) => {
@@ -161,6 +173,48 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // limpiamos todo y mandamos al Login.
       await get().signOut();
       set({ isLoading: false });
+    }
+  },
+
+
+  // --- LÓGICA BIOMÉTRICA ---
+  // 1. Verificar si el celular tiene hardware y si el usuario lo activó antes
+  checkBiometrics: async () => {
+    const compatible = await LocalAuthentication.hasHardwareAsync();
+    const enrolled = await LocalAuthentication.isEnrolledAsync();
+    const isSupported = compatible && enrolled;
+
+    // Recuperar preferencia guardada
+    const isEnabled = await tokenStorage.getBiometricPreference();
+
+    set({ isBiometricSupported: isSupported, isBiometricEnabled: isSupported && isEnabled });
+  },
+
+  // 2. Activar/Desactivar la opción (Para el perfil)
+  toggleBiometrics: async (enable: boolean) => {
+    if (enable) {
+      // Si quiere activar, pedimos huella una vez para confirmar que funciona
+      const success = await get().promptBiometrics();
+      if (!success) return false; // Si falla la huella, no activamos
+    }
+
+    await tokenStorage.setBiometricPreference(enable);
+    set({ isBiometricEnabled: enable });
+    return true;
+  },
+
+  // 3. Solicitar la huella (El Popup nativo)
+  promptBiometrics: async () => {
+    try {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Confirma tu identidad',
+        cancelLabel: 'Cancelar',
+        disableDeviceFallback: false, // Permite usar PIN si falla la huella
+      });
+      return result.success;
+    } catch (error) {
+      console.log('Error biométrico:', error);
+      return false;
     }
   },
 }));
