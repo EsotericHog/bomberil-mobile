@@ -8,6 +8,7 @@ export const ENDPOINTS = {
   },
   INVENTARIO: {
     EXISTENCIA_BUSCAR: (codigo: string) => `gestion_inventario/existencias/buscar/?codigo=${codigo}`,
+    CATALOGO_STOCK: (search: string = '') => `gestion_inventario/catalogo/stock/?search=${search}`,
     PRODUCTOS: 'inventario/productos/',
     MOVIMIENTOS: 'inventario/movimientos/',
     EXISTENCIAS: 'inventario/existencias/',

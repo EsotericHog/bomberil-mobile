@@ -1,24 +1,24 @@
 import { create } from 'zustand';
 import client from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
-import { Existencia } from '@/features/inventario/types';
+import { Existencia, ProductoStock } from '@/features/inventario/types';
 import { Alert } from 'react-native';
 
 interface InventoryState {
   currentExistencia: Existencia | null;
-  existencias: Existencia[];
+  catalogo: ProductoStock[];
   isLoading: boolean;
   error: string | null;
 
   // Acciones
   fetchExistenciaByQR: (codigo: string) => Promise<boolean>;
-  fetchExistencias: () => Promise<void>;
+  fetchCatalogo: (search?: string) => Promise<void>;
   clearCurrentExistencia: () => void;
 }
 
 export const useInventoryStore = create<InventoryState>((set) => ({
   currentExistencia: null,
-  existencias: [],
+  catalogo: [],
   isLoading: false,
   error: null,
 
@@ -52,17 +52,16 @@ export const useInventoryStore = create<InventoryState>((set) => ({
     }
   },
 
-  fetchExistencias: async () => {
+  // Acción conectada al endpoint agrupado
+  fetchCatalogo: async (search = '') => {
     set({ isLoading: true, error: null });
     try {
-      const response = await client.get(ENDPOINTS.INVENTARIO.EXISTENCIAS);
-      // Asumiendo que la API devuelve una lista directa o paginada en results
-      const data = Array.isArray(response.data) ? response.data : response.data.results || [];
-      
-      set({ existencias: data, isLoading: false });
+      const response = await client.get(ENDPOINTS.INVENTARIO.CATALOGO_STOCK(search));
+      // El backend devuelve una lista directa: [ {id, nombre...}, ... ]
+      set({ catalogo: response.data, isLoading: false });
     } catch (error: any) {
-      console.log("Error fetching list:", error);
-      set({ error: "No se pudo cargar el inventario", isLoading: false });
+      console.log("Error fetching catalog:", error);
+      set({ error: "No se pudo cargar el catálogo", isLoading: false });
     }
   },
 

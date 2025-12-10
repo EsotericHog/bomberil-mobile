@@ -46,3 +46,16 @@ export interface Existencia {
   // Historial
   historial_movimientos: Movimiento[];
 }
+
+// Interfaz para el listado de productos agrupados
+export interface ProductoStock {
+  id: number; // ID del Producto Local
+  nombre: string;
+  marca: string;
+  sku: string;
+  categoria: string;
+  es_activo: boolean; // true = Activo, false = Insumo/Lote
+  stock_total: number;
+  imagen: string | null;
+  critico: boolean; // Para pintar en rojo si el stock es bajo
+}
