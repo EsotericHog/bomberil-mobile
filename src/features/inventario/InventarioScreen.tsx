@@ -18,34 +18,60 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '@/navigation/types';
 // Importamos el store para usar la acción de búsqueda
 import { useInventoryStore } from '@/store/inventoryStore';
+import { useAuthStore } from '@/store/authStore';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'InventarioHome'>;
 
 export default function InventarioScreen({ navigation }: Props) {
   const { fetchExistenciaByQR, isLoading } = useInventoryStore();
+
+  // Obtenemos la estación del usuario logueado para construir el prefijo
+  const { estacion } = useAuthStore();
   
   // Estados para el Modal de Búsqueda Manual
   const [modalVisible, setModalVisible] = useState(false);
-  const [manualCode, setManualCode] = useState('');
+  const [manualInput, setManualInput] = useState('');
+  // Estado para el tipo de búsqueda predeterminado (para autocompletar)
+  const [searchType, setSearchType] = useState<'ACT' | 'LOT'>('ACT');
 
   const handleScanPress = () => {
     navigation.navigate('ScannerInventario'); 
   };
 
+  // Lógica de "Smart Search"
+  const formatCode = (input: string): string => {
+    const raw = input.trim().toUpperCase();
+    
+    // 1. Si ya parece un código completo (tiene guiones y longitud considerable), no tocar
+    if (raw.includes('-') && raw.length > 8) return raw;
+
+    // 2. Si es solo número, construimos el código completo
+    // formato: {codigo de la estación}-{TIPO}-{número con padding 5}
+    const stationCode = `${estacion?.codigo.toString().padStart(3, '0')}`;
+    const numberPart = raw.padStart(5, '0');
+    
+    return `${stationCode}-${searchType}-${numberPart}`;
+  };
+
   const handleManualSearch = async () => {
-    if (!manualCode.trim()) {
-      Alert.alert("Atención", "Por favor ingresa un código.");
+    if (!manualInput.trim()) {
+      Alert.alert("Atención", "Por favor ingresa un número o código.");
       return;
     }
 
+    const finalCode = formatCode(manualInput);
+    console.log("Buscando código:", finalCode); // Para debug
     // Reutilizamos la misma función del Scanner
-    const success = await fetchExistenciaByQR(manualCode);
+    const success = await fetchExistenciaByQR(finalCode);
     
     if (success) {
       setModalVisible(false);
-      setManualCode('');
-      // Navegamos al detalle, pasando el código ingresado (sku)
-      navigation.navigate('DetalleExistencia', { sku: manualCode });
+      setManualInput('');
+      navigation.navigate('DetalleExistencia', { sku: finalCode });
+    } else {
+        // Feedback opcional si falla la búsqueda inteligente
+        // Podríamos sugerir al usuario que intente con el código completo si falló el automático
+        Alert.alert("No encontrado", `No se encontró la existencia con código: ${finalCode}. \n\nVerifica si es un Activo o un Lote.`);
     }
     // Si falla, el store ya maneja el Alert de error, no necesitamos else aquí.
   };
@@ -133,25 +159,42 @@ export default function InventarioScreen({ navigation }: Props) {
             />
             <View className="bg-white rounded-t-3xl p-6 pb-10 shadow-xl">
               
-              <View className="flex-row justify-between items-center mb-6">
-                <Text className="text-xl font-bold text-gray-800">Búsqueda Manual</Text>
+              <View className="flex-row justify-between items-center mb-4">
+                <Text className="text-xl font-bold text-gray-800">Búsqueda Rápida</Text>
                 <TouchableOpacity onPress={() => setModalVisible(false)} className="p-2 bg-gray-100 rounded-full">
                   <Feather name="x" size={20} color="#4b5563" />
                 </TouchableOpacity>
               </View>
 
-              <Text className="text-gray-500 mb-2">Ingresa el Código, SKU o Serie:</Text>
+              <Text className="text-gray-500 mb-4 text-sm">
+                Ingresa el número correlativo (ej: 32) y seleccionaremos el prefijo automáticamente.
+              </Text>
               
+              {/* Selector de Tipo (Switch estilo Tabs) */}
+              <View className="flex-row bg-gray-100 p-1 rounded-xl mb-4">
+                <TouchableOpacity 
+                  onPress={() => setSearchType('ACT')}
+                  className={`flex-1 py-2 rounded-lg items-center ${searchType === 'ACT' ? 'bg-white shadow-sm' : ''}`}
+                >
+                  <Text className={`font-bold ${searchType === 'ACT' ? 'text-bomberil-700' : 'text-gray-400'}`}>Activo (ACT)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  onPress={() => setSearchType('LOT')}
+                  className={`flex-1 py-2 rounded-lg items-center ${searchType === 'LOT' ? 'bg-white shadow-sm' : ''}`}
+                >
+                  <Text className={`font-bold ${searchType === 'LOT' ? 'text-orange-600' : 'text-gray-400'}`}>Lote (LOT)</Text>
+                </TouchableOpacity>
+              </View>
+
               <View className="flex-row items-center border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 mb-6 focus:border-bomberil-700 focus:bg-white">
                 <Feather name="hash" size={20} color="#9ca3af" />
                 <TextInput
                   className="flex-1 ml-3 text-lg font-medium text-gray-900"
-                  placeholder="Ej: A-1024 o 789..."
-                  value={manualCode}
-                  onChangeText={setManualCode}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  autoFocus={true} // Abre el teclado automáticamente
+                  placeholder="Ej: 32"
+                  value={manualInput}
+                  onChangeText={setManualInput}
+                  keyboardType="numeric" // Teclado numérico para velocidad
+                  autoFocus={true}
                 />
               </View>
 
@@ -165,7 +208,7 @@ export default function InventarioScreen({ navigation }: Props) {
                 ) : (
                   <>
                     <Feather name="search" size={20} color="white" />
-                    <Text className="text-white font-bold text-lg ml-2">Buscar Existencia</Text>
+                    <Text className="text-white font-bold text-lg ml-2">Buscar</Text>
                   </>
                 )}
               </TouchableOpacity>
