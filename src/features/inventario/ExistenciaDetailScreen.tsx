@@ -63,7 +63,7 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
             <Image 
               source={{ uri: currentExistencia.imagen }} 
               className="w-full h-64 bg-gray-200"
-              resizeMode="cover"
+              resizeMode="contain"
             />
           )}
 
