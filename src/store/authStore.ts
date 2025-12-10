@@ -16,6 +16,7 @@ interface UsuarioData {
 interface EstacionData {
   id: number;
   nombre: string;
+  codigo: string;
 }
 
 // Tipo para la respuesta completa de tu API

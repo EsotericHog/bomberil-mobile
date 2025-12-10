@@ -6,6 +6,10 @@ import { AppStackParamList } from './types';
 // Placeholders (Crea archivos básicos para que no de error)
 import DashboardScreen from '@/features/dashboard/DashboardScreen'; // El Portal 
 import InventarioScreen from '@/features/inventario/InventarioScreen';
+import ScannerScreen from '@/features/inventario/ScannerScreen';
+import CatalogoLocalScreen from '@/features/inventario/CatalogoLocalScreen';
+import ExistenciasPorProductoScreen from '@/features/inventario/ExistenciasPorProductoScreen';
+import ExistenciaDetailScreen from '@/features/inventario/ExistenciaDetailScreen';
 import PerfilScreen from '@/features/perfil/PerfilScreen';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
@@ -29,6 +33,26 @@ export const AppNavigator = () => {
         name="InventarioHome" 
         component={InventarioScreen} 
         options={{ title: 'Gestión de Inventario' }} 
+      />
+      <Stack.Screen 
+        name="ScannerInventario" 
+        component={ScannerScreen} 
+        options={{ headerShown: false, animation: 'slide_from_bottom' }} 
+      />
+      <Stack.Screen 
+        name="CatalogoLocal" 
+        component={CatalogoLocalScreen} 
+        options={{ headerShown: false }} 
+      />
+      <Stack.Screen 
+        name="ExistenciasPorProducto" 
+        component={ExistenciasPorProductoScreen} 
+        options={{ headerShown: false }} 
+      />
+      <Stack.Screen 
+        name="DetalleExistencia" 
+        component={ExistenciaDetailScreen} 
+        options={{ headerShown: false }} 
       />
       <Stack.Screen 
         name="MiPerfil" 
