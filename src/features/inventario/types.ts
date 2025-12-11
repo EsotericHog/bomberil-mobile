@@ -82,3 +82,24 @@ export interface RecepcionPayload {
   notas?: string;
   detalles: DetalleRecepcionItem[];
 }
+
+// Modelos para selectores
+export interface Proveedor {
+  id: number;
+  nombre: string;
+  rut: string;
+  es_local: boolean;
+}
+
+export interface Ubicacion {
+  id: string; // UUID
+  nombre: string;
+  tipo: string;
+  codigo: string;
+}
+
+export interface Compartimento {
+  id: string; // UUID
+  nombre: string;
+  codigo: string;
+}

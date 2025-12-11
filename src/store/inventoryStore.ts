@@ -1,7 +1,14 @@
 import { create } from 'zustand';
 import client from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
-import { Existencia, ProductoStock, RecepcionPayload } from '@/features/inventario/types';
+import { 
+  Existencia, 
+  ProductoStock, 
+  RecepcionPayload, 
+  Proveedor, 
+  Ubicacion, 
+  Compartimento 
+} from '@/features/inventario/types';
 import { Alert } from 'react-native';
 
 interface InventoryState {
@@ -10,6 +17,10 @@ interface InventoryState {
   existenciasProducto: [],
   isLoading: boolean;
   error: string | null;
+  // Estados para selectores
+  proveedores: Proveedor[];
+  ubicaciones: Ubicacion[];
+  compartimentos: Compartimento[]; // Esta lista cambiará según la ubicación seleccionada
 
   // Acciones
   fetchExistenciaByQR: (codigo: string) => Promise<boolean>;
@@ -18,6 +29,12 @@ interface InventoryState {
   recepcionarStock: (payload: RecepcionPayload) => Promise<boolean>;
   clearCurrentExistencia: () => void;
   clearExistenciasProducto: () => void;
+
+  // Acciones para selectores
+  fetchProveedores: (search?: string) => Promise<void>;
+  fetchUbicaciones: (soloFisicas?: boolean) => Promise<void>;
+  fetchCompartimentos: (ubicacionId: string) => Promise<void>;
+  clearCompartimentos: () => void;
 }
 
 export const useInventoryStore = create<InventoryState>((set) => ({
@@ -26,6 +43,9 @@ export const useInventoryStore = create<InventoryState>((set) => ({
   existenciasProducto: [],
   isLoading: false,
   error: null,
+  proveedores: [],
+  ubicaciones: [],
+  compartimentos: [],
 
   fetchExistenciaByQR: async (codigo) => {
     set({ isLoading: true, error: null });
@@ -106,4 +126,36 @@ export const useInventoryStore = create<InventoryState>((set) => ({
 
   clearCurrentExistencia: () => set({ currentExistencia: null, error: null }),
   clearExistenciasProducto: () => set({ existenciasProducto: [], error: null }),
+
+  fetchProveedores: async (search = '') => {
+    // No activamos isLoading global para no bloquear toda la UI si es un dropdown
+    try {
+      const response = await client.get(ENDPOINTS.INVENTARIO.CORE_PROVEEDORES(search));
+      set({ proveedores: response.data });
+    } catch (error) {
+      console.log("Error fetching proveedores", error);
+    }
+  },
+
+  fetchUbicaciones: async (soloFisicas = true) => {
+    try {
+      const response = await client.get(ENDPOINTS.INVENTARIO.CORE_UBICACIONES(soloFisicas));
+      set({ ubicaciones: response.data });
+    } catch (error) {
+      console.log("Error fetching ubicaciones", error);
+    }
+  },
+
+  fetchCompartimentos: async (ubicacionId: string) => {
+    // Aquí podríamos tener un loading local si quisiéramos
+    set({ compartimentos: [] }); // Limpiar anteriores
+    try {
+      const response = await client.get(ENDPOINTS.INVENTARIO.CORE_COMPARTIMENTOS(ubicacionId));
+      set({ compartimentos: response.data });
+    } catch (error) {
+      console.log("Error fetching compartimentos", error);
+    }
+  },
+
+  clearCompartimentos: () => set({ compartimentos: [] }),
 }));
