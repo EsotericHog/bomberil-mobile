@@ -7,7 +7,8 @@ import {
   RecepcionPayload, 
   Proveedor, 
   Ubicacion, 
-  Compartimento 
+  Compartimento, 
+  AjusteStockPayload
 } from '@/features/inventario/types';
 import { Alert } from 'react-native';
 
@@ -27,6 +28,7 @@ interface InventoryState {
   fetchCatalogo: (search?: string) => Promise<void>;
   fetchExistenciasPorProducto: (productoId: number) => Promise<void>;
   recepcionarStock: (payload: RecepcionPayload) => Promise<boolean>;
+  ajustarStock: (payload: AjusteStockPayload) => Promise<boolean>;
   clearCurrentExistencia: () => void;
   clearExistenciasProducto: () => void;
 
@@ -37,7 +39,7 @@ interface InventoryState {
   clearCompartimentos: () => void;
 }
 
-export const useInventoryStore = create<InventoryState>((set) => ({
+export const useInventoryStore = create<InventoryState>((set, get) => ({
   currentExistencia: null,
   catalogo: [],
   existenciasProducto: [],
@@ -120,6 +122,28 @@ export const useInventoryStore = create<InventoryState>((set) => ({
       
       set({ error: msg, isLoading: false });
       Alert.alert("Error de Recepción", msg);
+      return false;
+    }
+  },
+
+  ajustarStock: async (payload: AjusteStockPayload) => {
+    set({ isLoading: true, error: null });
+    try {
+      await client.post(ENDPOINTS.INVENTARIO.AJUSTAR_STOCK, payload);
+      
+      // Si tuvo éxito, recargamos la existencia actual para ver el cambio reflejado
+      const current = get().currentExistencia;
+      if (current) {
+        await get().fetchExistenciaByQR(current.codigo);
+      }
+      
+      set({ isLoading: false });
+      return true;
+    } catch (error: any) {
+      console.log("Error ajustando stock:", error);
+      const msg = error.response?.data?.detail || "Error al realizar el ajuste.";
+      set({ error: msg, isLoading: false });
+      Alert.alert("Error", msg);
       return false;
     }
   },

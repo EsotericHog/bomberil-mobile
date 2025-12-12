@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Image, FlatList } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Image, Modal, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useInventoryStore } from '@/store/inventoryStore';
@@ -9,7 +9,12 @@ import { AppStackParamList } from '@/navigation/types';
 type Props = NativeStackScreenProps<AppStackParamList, 'DetalleExistencia'>;
 
 export default function ExistenciaDetailScreen({ navigation }: Props) {
-  const { currentExistencia, isLoading, clearCurrentExistencia } = useInventoryStore();
+  const { currentExistencia, isLoading, clearCurrentExistencia, ajustarStock } = useInventoryStore();
+
+  // Estado para Modal de Ajuste de stock
+  const [showAjusteModal, setShowAjusteModal] = useState(false);
+  const [nuevaCantidad, setNuevaCantidad] = useState('');
+  const [notaAjuste, setNotaAjuste] = useState('');
 
   useEffect(() => {
     return () => clearCurrentExistencia();
@@ -23,9 +28,49 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
     );
   }
 
+
+
+
+  const handleAjusteSubmit = async () => {
+    if (!nuevaCantidad || parseInt(nuevaCantidad) < 0) {
+      Alert.alert("Error", "Ingresa una cantidad válida (0 o superior).");
+      return;
+    }
+    
+    if (!currentExistencia) return;
+
+    // Validación de negocio: No permitir ajuste sin cambio real
+    if (parseInt(nuevaCantidad) === currentExistencia.cantidad_actual) {
+      Alert.alert("Sin cambios", "La nueva cantidad es igual a la actual.");
+      return;
+    }
+
+    const success = await ajustarStock({
+      id: currentExistencia.id,
+      nueva_cantidad: parseInt(nuevaCantidad),
+      notas: notaAjuste
+    });
+
+    if (success) {
+      setShowAjusteModal(false);
+      setNuevaCantidad('');
+      setNotaAjuste('');
+      Alert.alert("Ajuste Realizado", "El inventario ha sido actualizado correctamente.");
+    }
+  };
+
+  // Cálculo de diferencia visual
+  const diff = nuevaCantidad && currentExistencia ? parseInt(nuevaCantidad) - (currentExistencia.cantidad_actual || 0) : 0;
+  const diffColor = diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-gray-400';
+  const diffSign = diff > 0 ? '+' : '';
+
+
+
+
   // Mapeo seguro del tipo para evitar el error undefined
   const tipoLabel = currentExistencia.tipo_existencia === 'ACTIVO' ? 'ACTIVO SERIALIZADO' : 'LOTE DE INSUMOS';
   const isActivo = currentExistencia.tipo_existencia === 'ACTIVO';
+
 
   // Renderizado de cada item del historial
   const renderMovimiento = (mov: any) => (
@@ -44,6 +89,7 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
       </View>
     </View>
   );
+
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -135,6 +181,25 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
                   </View>
                 </>
               )}
+              {/* BLOQUE DE ACCIÓN PARA LOTES */}
+              {!isActivo && (
+                <View className="mt-4 pt-4 border-t border-gray-100">
+                  <View className="flex-row justify-between items-center mb-3">
+                    <Text className="text-gray-500 text-xs uppercase font-bold">Gestión de Stock</Text>
+                  </View>
+                  
+                  <TouchableOpacity 
+                    onPress={() => {
+                        setNuevaCantidad(currentExistencia?.cantidad_actual?.toString() || '0');
+                        setShowAjusteModal(true);
+                    }}
+                    className="bg-gray-900 py-3 rounded-xl flex-row justify-center items-center"
+                  >
+                    <Feather name="sliders" size={18} color="white" />
+                    <Text className="text-white font-bold ml-2">Ajustar Cantidad</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             {/* SECCIÓN: HISTORIAL DE MOVIMIENTOS */}
@@ -150,6 +215,78 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
           </View>
         </ScrollView>
       </SafeAreaView>
+
+
+
+
+      {/* --- MODAL DE AJUSTE --- */}
+      <Modal animationType="slide" transparent={true} visible={showAjusteModal} onRequestClose={() => setShowAjusteModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1 justify-end bg-black/60">
+          <View className="bg-white rounded-t-3xl p-6">
+            <View className="flex-row justify-between items-center mb-6">
+              <Text className="text-xl font-bold text-gray-800">Ajustar Inventario</Text>
+              <TouchableOpacity onPress={() => setShowAjusteModal(false)} className="p-2 bg-gray-100 rounded-full">
+                <Feather name="x" size={24} color="#4b5563" />
+              </TouchableOpacity>
+            </View>
+
+            <View className="flex-row items-center justify-between bg-gray-50 p-4 rounded-xl mb-6 border border-gray-200">
+              <View>
+                <Text className="text-gray-500 text-xs mb-1">Stock Actual</Text>
+                <Text className="text-2xl font-bold text-gray-800">{currentExistencia?.cantidad_actual}</Text>
+              </View>
+              <Feather name="arrow-right" size={24} color="#9ca3af" />
+              <View className="items-end">
+                <Text className="text-gray-500 text-xs mb-1">Nuevo Stock</Text>
+                <TextInput 
+                  className="text-3xl font-bold text-bomberil-700 text-right min-w-[80px] border-b border-gray-300 p-0"
+                  value={nuevaCantidad}
+                  onChangeText={setNuevaCantidad}
+                  keyboardType="numeric"
+                  autoFocus
+                  selectTextOnFocus
+                />
+              </View>
+            </View>
+
+            {/* Indicador de Diferencia */}
+            <View className="items-center mb-6">
+                <Text className={`font-bold text-lg ${diffColor}`}>
+                    Diferencia: {diffSign}{diff} unidades
+                </Text>
+                <Text className="text-xs text-gray-400">Esto generará un movimiento de tipo AJUSTE</Text>
+            </View>
+
+            <Text className="text-gray-600 font-bold mb-2 text-sm">Motivo del ajuste *</Text>
+            <TextInput 
+              className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mb-6 h-24 text-gray-800"
+              placeholder="Ej: Conteo cíclico, error de digitación anterior..."
+              multiline
+              textAlignVertical="top"
+              value={notaAjuste}
+              onChangeText={setNotaAjuste}
+            />
+
+            <TouchableOpacity 
+              onPress={handleAjusteSubmit}
+              className="bg-bomberil-700 py-4 rounded-xl flex-row justify-center items-center shadow-md mb-4"
+            >
+              {isLoading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <>
+                  <Feather name="save" size={20} color="white" />
+                  <Text className="text-white font-bold text-lg ml-2">Confirmar Ajuste</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+
+
+
     </View>
   );
 }

@@ -21,7 +21,7 @@ export interface MantenimientoStats {
 // Interfaz unificada basada en tu respuesta del backend (data_response)
 export interface Existencia {
   tipo_existencia: 'ACTIVO' | 'LOTE'; // Backend envía esto ahora
-  id: number;
+  id: string;
   sku: string;
   codigo: string;
   nombre: string;
@@ -102,4 +102,10 @@ export interface Compartimento {
   id: string; // UUID
   nombre: string;
   codigo: string;
+}
+
+export interface AjusteStockPayload {
+  id: string; // ID del Lote
+  nueva_cantidad: number;
+  notas?: string;
 }

@@ -11,6 +11,7 @@ export const ENDPOINTS = {
     CATALOGO_STOCK: (search: string = '') => `gestion_inventario/catalogo/stock/?search=${search}`,
     EXISTENCIAS_POR_PRODUCTO: (productoId: number) => `gestion_inventario/existencias/?producto=${productoId}`,
     RECEPCION_STOCK: 'gestion_inventario/movimientos/recepcion/',
+    AJUSTAR_STOCK: 'gestion_inventario/movimientos/ajustar/',
 
     // Rutas Auxiliares / Core
     CORE_UBICACIONES: (soloFisicas: boolean = true) => `gestion_inventario/core/ubicaciones/?solo_fisicas=${soloFisicas}`,
