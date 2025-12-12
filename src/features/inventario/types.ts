@@ -132,3 +132,82 @@ export interface AnularPayload {
   id: string;
   motivo: string;
 }
+
+export interface Destinatario {
+  id: number;
+  nombre: string;
+}
+
+// Lo que muestra la lista del historial
+export interface PrestamoResumen {
+  id: number;
+  destinatario: string;
+  fecha: string; // ISO Date
+  estado_display: string;
+  estado_codigo: 'PEN' | 'PAR' | 'COM' | 'VEN'; // Pendiente, Parcial, Completado, Vencido
+  responsable: string;
+  total_items: number;
+  notas: string;
+}
+
+// Lo que devuelve el buscador de ítems para prestar
+export interface ItemPrestable {
+  id: string; // UUID
+  tipo: 'ACTIVO' | 'LOTE';
+  codigo: string;
+  nombre: string;
+  marca?: string;
+  ubicacion: string;
+  cantidad_disponible: number; 
+  unidad_medida?: string;
+}
+
+// Payload para crear un préstamo
+export interface ItemPrestamoPayload {
+  tipo: 'activo' | 'lote'; // minúsculas según tu API View
+  id: string;
+  cantidad_prestada: number;
+}
+
+export interface CrearPrestamoPayload {
+  destinatario_id?: number;
+  nuevo_destinatario_nombre?: string; // Opción para crear uno nuevo
+  nuevo_destinatario_contacto?: string;
+  notas?: string;
+  items: ItemPrestamoPayload[];
+}
+
+// Estructura de un ítem en el detalle del préstamo (respuesta del GET)
+export interface PrestamoDetalleItem {
+  detalle_id: number;
+  tipo: 'activo' | 'lote';
+  nombre: string;
+  codigo: string;
+  cantidad_prestada: number;
+  cantidad_devuelta: number;
+  cantidad_extraviada: number;
+  pendiente: number; // Calculado por backend
+  saldado: boolean;
+}
+
+// Estructura de la cabecera + ítems (respuesta del GET)
+export interface PrestamoFull {
+  id: number;
+  destinatario: string;
+  fecha_prestamo: string;
+  estado: string;
+  estado_display: string;
+  notas: string;
+  items: PrestamoDetalleItem[];
+}
+
+// Payload para el POST de gestión
+export interface DevolucionItemPayload {
+  detalle_id: number;
+  devolver: number;
+  perder: number;
+}
+
+export interface GestionarDevolucionPayload {
+  items: DevolucionItemPayload[];
+}

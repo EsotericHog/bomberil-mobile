@@ -18,13 +18,20 @@ export const ENDPOINTS = {
     ANULAR_EXISTENCIA: 'gestion_inventario/movimientos/anular/',
 
     // Rutas Auxiliares / Core
-    CORE_UBICACIONES: (soloFisicas: boolean = true) => `gestion_inventario/core/ubicaciones/?solo_fisicas=${soloFisicas}`,
+    CORE_UBICACIONES: (soloFisicas: boolean = false) => `gestion_inventario/core/ubicaciones/?solo_fisicas=${soloFisicas}`,
     CORE_COMPARTIMENTOS: (ubicacionId: string) => `gestion_inventario/core/compartimentos/?ubicacion=${ubicacionId}`,
     CORE_PROVEEDORES: (search: string = '') => `gestion_inventario/core/proveedores/?search=${search}`,
 
     PRODUCTOS: 'inventario/productos/',
     MOVIMIENTOS: 'inventario/movimientos/',
     EXISTENCIAS: 'inventario/existencias/',
+
+    // --- PRÉSTAMOS ---
+    PRESTAMOS_HISTORIAL: (todos: boolean = true, search: string = '') => `gestion_inventario/prestamos/?todos=${todos}&search=${search}`,
+    PRESTAMOS_DESTINATARIOS: 'gestion_inventario/destinatarios/',
+    PRESTAMOS_BUSCAR_ITEMS: (search: string = '') => `gestion_inventario/prestamo/buscar-prestables/?q=${search}`, // Asumimos param 'q' para búsqueda
+    PRESTAMOS_CREAR: 'gestion_inventario/prestamos/crear/',
+    PRESTAMOS_DEVOLUCION: (id: number) => `gestion_inventario/prestamos/${id}/devolucion/`,
   },
   VOLUNTARIOS: {
     HOJA_VIDA: 'voluntarios/hoja-vida/',

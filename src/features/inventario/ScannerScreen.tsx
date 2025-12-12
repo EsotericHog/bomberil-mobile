@@ -3,19 +3,26 @@ import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Alert } from 'reac
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppStackParamList } from '@/navigation/types';
 import { useInventoryStore } from '@/store/inventoryStore';
 
 type NavigationProp = NativeStackNavigationProp<AppStackParamList>;
+type ScannerRouteProp = RouteProp<AppStackParamList, 'ScannerInventario'>;
 
 export default function ScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<ScannerRouteProp>(); // Hook para obtener params
+  
   const insets = useSafeAreaInsets();
   const { fetchExistenciaByQR } = useInventoryStore();
+
+  // Capturamos si hay una pantalla de retorno definida
+  const returnScreen = route.params?.returnScreen;
 
   if (!permission) return <View style={styles.container} />;
 
@@ -34,13 +41,23 @@ export default function ScannerScreen() {
     if (scanned) return;
     setScanned(true);
     
+    // --- LÓGICA DE RETORNO (Nuevo Préstamo) ---
+    if (returnScreen) {
+      // Si nos llamaron para seleccionar un ítem, devolvemos el código y salimos
+      // @ts-ignore - TypeScript puede quejarse de la navegación dinámica, pero es válida
+      navigation.navigate(returnScreen, { scannedCode: data });
+      return;
+    }
+
+    // --- LÓGICA DEFAULT (Ver Detalle) ---
     // Llamada al endpoint
     const success = await fetchExistenciaByQR(data);
     
     if (success) {
-      // Reemplazamos la pantalla actual para que al volver regrese al Dashboard, no a la cámara
+      // Reemplazamos la pantalla actual para que al volver regrese al Dashboard
       navigation.replace('DetalleExistencia', { sku: data });
     } else {
+      // Si falló la búsqueda, permitimos escanear de nuevo tras 2 segundos
       setTimeout(() => setScanned(false), 2000);
     }
   };
@@ -68,7 +85,9 @@ export default function ScannerScreen() {
           <View style={[styles.corner, { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4 }]} />
         </View>
         
-        <Text style={styles.hintText}>Escaneando código QR...</Text>
+        <Text style={styles.hintText}>
+          {returnScreen ? 'Escanea para agregar al préstamo' : 'Escaneando código QR...'}
+        </Text>
       </View>
 
       {scanned && (

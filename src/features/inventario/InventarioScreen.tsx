@@ -146,6 +146,14 @@ export default function InventarioScreen({ navigation }: Props) {
             <Text className="text-gray-700 font-bold ml-2">Nueva Recepción de Stock</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity 
+            onPress={() => navigation.navigate('PrestamosHome')} 
+            className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-full items-center mt-3 flex-row justify-center"
+          >
+            <Feather name="share" size={24} color="#4b5563" />
+            <Text className="text-gray-700 font-bold ml-2">Gestión de Préstamos</Text>
+          </TouchableOpacity>
+
         </ScrollView>
       </SafeAreaView>
 
