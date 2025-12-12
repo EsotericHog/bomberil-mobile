@@ -176,3 +176,38 @@ export interface CrearPrestamoPayload {
   notas?: string;
   items: ItemPrestamoPayload[];
 }
+
+// Estructura de un ítem en el detalle del préstamo (respuesta del GET)
+export interface PrestamoDetalleItem {
+  detalle_id: number;
+  tipo: 'activo' | 'lote';
+  nombre: string;
+  codigo: string;
+  cantidad_prestada: number;
+  cantidad_devuelta: number;
+  cantidad_extraviada: number;
+  pendiente: number; // Calculado por backend
+  saldado: boolean;
+}
+
+// Estructura de la cabecera + ítems (respuesta del GET)
+export interface PrestamoFull {
+  id: number;
+  destinatario: string;
+  fecha_prestamo: string;
+  estado: string;
+  estado_display: string;
+  notas: string;
+  items: PrestamoDetalleItem[];
+}
+
+// Payload para el POST de gestión
+export interface DevolucionItemPayload {
+  detalle_id: number;
+  devolver: number;
+  perder: number;
+}
+
+export interface GestionarDevolucionPayload {
+  items: DevolucionItemPayload[];
+}

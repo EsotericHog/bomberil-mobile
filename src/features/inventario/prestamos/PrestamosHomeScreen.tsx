@@ -40,8 +40,7 @@ export default function PrestamosHomeScreen({ navigation }: Props) {
   const renderItem = ({ item }: { item: PrestamoResumen }) => (
     <TouchableOpacity 
       className="bg-white p-4 mb-3 rounded-2xl border border-gray-100 shadow-sm"
-      onPress={() => Alert.alert("Próximamente", "El detalle del préstamo se implementará en la Fase 4.")}
-      // onPress={() => navigation.navigate('DetallePrestamo', { id: item.id })} // Futuro enlace
+      onPress={() => navigation.navigate('DetallePrestamo', { id: item.id })}
     >
       <View className="flex-row justify-between items-start mb-2">
         <View className="flex-1">
