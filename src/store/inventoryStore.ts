@@ -10,7 +10,8 @@ import {
   Compartimento, 
   AjusteStockPayload,
   ConsumoStockPayload,
-  BajaPayload
+  BajaPayload,
+  ExtravioPayload
 } from '@/features/inventario/types';
 import { Alert } from 'react-native';
 
@@ -33,6 +34,7 @@ interface InventoryState {
   ajustarStock: (payload: AjusteStockPayload) => Promise<boolean>;
   consumirStock: (payload: ConsumoStockPayload) => Promise<boolean>;
   darDeBajaExistencia: (notas: string) => Promise<boolean>;
+  reportarExtravio: (notas: string) => Promise<boolean>;
   clearCurrentExistencia: () => void;
   clearExistenciasProducto: () => void;
 
@@ -200,6 +202,34 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     } catch (error: any) {
       console.log("Error dando de baja:", error);
       const msg = error.response?.data?.detail || "Error al procesar la baja.";
+      set({ error: msg, isLoading: false });
+      Alert.alert("Error", msg);
+      return false;
+    }
+  },
+
+  reportarExtravio: async (notas: string) => {
+    const current = get().currentExistencia;
+    if (!current || current.tipo_existencia !== 'ACTIVO') return false;
+
+    set({ isLoading: true, error: null });
+
+    try {
+      const payload: ExtravioPayload = {
+        id: current.id.toString(),
+        notas: notas
+      };
+
+      await client.post(ENDPOINTS.INVENTARIO.EXTRAVIO_ACTIVO, payload);
+      
+      // Recargar datos para ver estado "EXTRAVIADO"
+      await get().fetchExistenciaByQR(current.codigo);
+      
+      set({ isLoading: false });
+      return true;
+    } catch (error: any) {
+      console.log("Error reportando extravío:", error);
+      const msg = error.response?.data?.detail || "Error al reportar el extravío.";
       set({ error: msg, isLoading: false });
       Alert.alert("Error", msg);
       return false;

@@ -121,3 +121,8 @@ export interface BajaPayload {
   id: string;
   notas: string;
 }
+
+export interface ExtravioPayload {
+  id: string; // UUID del activo
+  notas: string;
+}
