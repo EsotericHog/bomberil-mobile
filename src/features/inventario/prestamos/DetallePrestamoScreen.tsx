@@ -49,6 +49,28 @@ export default function DetallePrestamoScreen({ navigation, route }: Props) {
     });
   };
 
+  // Manejador para botones (Activos)
+  const toggleActionActivo = (detalleId: number, action: 'devolver' | 'perder') => {
+    setInputs(prev => {
+      const current = prev[detalleId] || { devolver: '', perder: '' };
+      const isCurrentlyActive = current[action] === '1';
+
+      // Si ya estaba activo, lo desactivamos (volver a 0).
+      // Si no, activamos la acción actual (1) y limpiamos la otra (0).
+      if (isCurrentlyActive) {
+        return { ...prev, [detalleId]: { devolver: '', perder: '' } };
+      } else {
+        return { 
+          ...prev, 
+          [detalleId]: { 
+            devolver: action === 'devolver' ? '1' : '', 
+            perder: action === 'perder' ? '1' : '' 
+          } 
+        };
+      }
+    });
+  };
+
   const handleSubmit = async () => {
     // Transformar inputs a Payload
     const itemsPayload: DevolucionItemPayload[] = [];
@@ -134,13 +156,24 @@ export default function DetallePrestamoScreen({ navigation, route }: Props) {
           {currentPrestamo.items.map((item) => {
             const inputData = inputs[item.detalle_id] || { devolver: '', perder: '' };
             const isSaldado = item.saldado;
+            const isActivo = item.tipo === 'activo'; // Detectar tipo
+
+            // Para botones de activos
+            const isReturning = inputData.devolver === '1';
+            const isLosing = inputData.perder === '1';
 
             return (
               <View key={item.detalle_id} className={`bg-white p-4 mb-3 rounded-xl border ${isSaldado ? 'border-green-100 opacity-70' : 'border-gray-200'} shadow-sm`}>
-                {/* Info Básica */}
+                
+                {/* Info Básica (Igual) */}
                 <View className="flex-row justify-between items-start mb-3">
                    <View className="flex-1">
-                      <Text className="font-bold text-gray-800">{item.nombre}</Text>
+                      <View className="flex-row items-center mb-1">
+                        <View className={`mr-2 px-1.5 py-0.5 rounded ${isActivo ? 'bg-blue-100' : 'bg-orange-100'}`}>
+                           <Text className={`text-[10px] font-bold ${isActivo ? 'text-blue-800' : 'text-orange-800'}`}>{isActivo ? 'ACT' : 'LOT'}</Text>
+                        </View>
+                        <Text className="font-bold text-gray-800 flex-1">{item.nombre}</Text>
+                      </View>
                       <Text className="text-xs text-gray-500">{item.codigo}</Text>
                    </View>
                    {isSaldado && (
@@ -150,7 +183,7 @@ export default function DetallePrestamoScreen({ navigation, route }: Props) {
                    )}
                 </View>
 
-                {/* Estadísticas */}
+                {/* Estadísticas (Igual) */}
                 <View className="flex-row bg-gray-50 p-2 rounded-lg justify-between mb-3">
                    <View className="items-center flex-1">
                       <Text className="text-[10px] text-gray-400 uppercase">Prestado</Text>
@@ -166,29 +199,53 @@ export default function DetallePrestamoScreen({ navigation, route }: Props) {
                    </View>
                 </View>
 
-                {/* Inputs de Gestión (Solo si hay pendiente) */}
+                {/* ZONA DE GESTIÓN */}
                 {!isSaldado && (
-                  <View className="flex-row gap-2 mt-1">
-                    <View className="flex-1">
-                       <Text className="text-[10px] text-green-700 font-bold mb-1 ml-1">DEVOLVER</Text>
-                       <TextInput 
-                          className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-center font-bold text-green-900"
-                          placeholder="0"
-                          keyboardType="numeric"
-                          value={inputData.devolver}
-                          onChangeText={(t) => handleInputChange(item.detalle_id, 'devolver', t, item.pendiente)}
-                       />
-                    </View>
-                    <View className="flex-1">
-                       <Text className="text-[10px] text-red-700 font-bold mb-1 ml-1">REPORTAR PERDIDO</Text>
-                       <TextInput 
-                          className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-center font-bold text-red-900"
-                          placeholder="0"
-                          keyboardType="numeric"
-                          value={inputData.perder}
-                          onChangeText={(t) => handleInputChange(item.detalle_id, 'perder', t, item.pendiente)}
-                       />
-                    </View>
+                  <View>
+                    {isActivo ? (
+                      /* OPCIÓN A: BOTONES (Solo para Activos) */
+                      <View className="flex-row gap-2 mt-1">
+                        <TouchableOpacity 
+                          onPress={() => toggleActionActivo(item.detalle_id, 'devolver')}
+                          className={`flex-1 py-3 rounded-xl border flex-row justify-center items-center ${isReturning ? 'bg-green-600 border-green-600' : 'bg-white border-green-200'}`}
+                        >
+                          <Feather name="check-circle" size={18} color={isReturning ? 'white' : '#15803d'} />
+                          <Text className={`ml-2 font-bold ${isReturning ? 'text-white' : 'text-green-700'}`}>Devolver</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                          onPress={() => toggleActionActivo(item.detalle_id, 'perder')}
+                          className={`flex-1 py-3 rounded-xl border flex-row justify-center items-center ${isLosing ? 'bg-red-600 border-red-600' : 'bg-white border-red-200'}`}
+                        >
+                          <Feather name="alert-circle" size={18} color={isLosing ? 'white' : '#b91c1c'} />
+                          <Text className={`ml-2 font-bold ${isLosing ? 'text-white' : 'text-red-700'}`}>Perdido</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      /* OPCIÓN B: INPUTS (Solo para Lotes) */
+                      <View className="flex-row gap-2 mt-1">
+                        <View className="flex-1">
+                           <Text className="text-[10px] text-green-700 font-bold mb-1 ml-1">DEVOLVER (Cant.)</Text>
+                           <TextInput 
+                              className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 text-center font-bold text-green-900"
+                              placeholder="0"
+                              keyboardType="numeric"
+                              value={inputData.devolver}
+                              onChangeText={(t) => handleInputChange(item.detalle_id, 'devolver', t, item.pendiente)}
+                           />
+                        </View>
+                        <View className="flex-1">
+                           <Text className="text-[10px] text-red-700 font-bold mb-1 ml-1">REPORTAR (Cant.)</Text>
+                           <TextInput 
+                              className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-center font-bold text-red-900"
+                              placeholder="0"
+                              keyboardType="numeric"
+                              value={inputData.perder}
+                              onChangeText={(t) => handleInputChange(item.detalle_id, 'perder', t, item.pendiente)}
+                           />
+                        </View>
+                      </View>
+                    )}
                   </View>
                 )}
               </View>

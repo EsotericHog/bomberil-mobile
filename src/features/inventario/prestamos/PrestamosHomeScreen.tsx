@@ -112,7 +112,7 @@ export default function PrestamosHomeScreen({ navigation }: Props) {
             className={`px-4 py-2 rounded-xl justify-center border ${showAll ? 'bg-gray-200 border-gray-300' : 'bg-white border-gray-200'}`}
           >
             <Text className={`text-xs font-bold ${showAll ? 'text-gray-600' : 'text-bomberil-700'}`}>
-              {showAll ? 'Todos' : 'Activos'}
+              {showAll ? 'Todos' : 'Pendiente'}
             </Text>
           </TouchableOpacity>
         </View>
