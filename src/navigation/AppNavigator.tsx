@@ -10,6 +10,7 @@ import ScannerScreen from '@/features/inventario/ScannerScreen';
 import CatalogoLocalScreen from '@/features/inventario/CatalogoLocalScreen';
 import ExistenciasPorProductoScreen from '@/features/inventario/ExistenciasPorProductoScreen';
 import ExistenciaDetailScreen from '@/features/inventario/ExistenciaDetailScreen';
+import RecepcionStockScreen from '@/features/inventario/RecepcionStockScreen';
 import PerfilScreen from '@/features/perfil/PerfilScreen';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
@@ -53,6 +54,11 @@ export const AppNavigator = () => {
         name="DetalleExistencia" 
         component={ExistenciaDetailScreen} 
         options={{ headerShown: false }} 
+      />
+      <Stack.Screen 
+        name="RecepcionStock" 
+        component={RecepcionStockScreen} 
+        options={{ title: 'Nueva Recepción' }} // O headerShown: false si prefieres tu propio header
       />
       <Stack.Screen 
         name="MiPerfil" 
