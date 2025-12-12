@@ -16,6 +16,11 @@ export type AppStackParamList = {
   ExistenciasPorProducto: { productoId: number; nombreProducto: string };
   DetalleExistencia: { sku: string }; // Ejemplo de paso de parámetros
   RecepcionStock: undefined;
+
+  PrestamosHome: undefined;
+  CrearPrestamo: undefined; 
+  DetallePrestamo: { id: number };
+  
   VoluntariosHome: undefined; // Módulo Voluntarios
   FichaMedica: { voluntarioId?: number }; // Módulo Médico
   MiPerfil: undefined;
