@@ -11,7 +11,8 @@ import {
   AjusteStockPayload,
   ConsumoStockPayload,
   BajaPayload,
-  ExtravioPayload
+  ExtravioPayload,
+  AnularPayload
 } from '@/features/inventario/types';
 import { Alert } from 'react-native';
 
@@ -35,6 +36,7 @@ interface InventoryState {
   consumirStock: (payload: ConsumoStockPayload) => Promise<boolean>;
   darDeBajaExistencia: (notas: string) => Promise<boolean>;
   reportarExtravio: (notas: string) => Promise<boolean>;
+  anularExistencia: (motivo: string) => Promise<boolean>;
   clearCurrentExistencia: () => void;
   clearExistenciasProducto: () => void;
 
@@ -230,6 +232,37 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     } catch (error: any) {
       console.log("Error reportando extravío:", error);
       const msg = error.response?.data?.detail || "Error al reportar el extravío.";
+      set({ error: msg, isLoading: false });
+      Alert.alert("Error", msg);
+      return false;
+    }
+  },
+
+  anularExistencia: async (motivo: string) => {
+    const current = get().currentExistencia;
+    if (!current) return false;
+
+    set({ isLoading: true, error: null });
+
+    try {
+      const tipoBackend = current.tipo_existencia === 'LOTE' ? 'LOTE' : 'ACTIVO';
+
+      const payload: AnularPayload = {
+        id: current.id.toString(),
+        tipo: tipoBackend as 'ACTIVO' | 'LOTE',
+        motivo: motivo
+      };
+
+      await client.post(ENDPOINTS.INVENTARIO.ANULAR_EXISTENCIA, payload);
+      
+      // Recargar para ver estado "ANULADO POR ERROR"
+      await get().fetchExistenciaByQR(current.codigo);
+      
+      set({ isLoading: false });
+      return true;
+    } catch (error: any) {
+      console.log("Error anulando:", error);
+      const msg = error.response?.data?.detail || "Error al anular el registro.";
       set({ error: msg, isLoading: false });
       Alert.alert("Error", msg);
       return false;

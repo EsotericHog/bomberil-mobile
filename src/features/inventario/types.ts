@@ -126,3 +126,9 @@ export interface ExtravioPayload {
   id: string; // UUID del activo
   notas: string;
 }
+
+export interface AnularPayload {
+  tipo: 'ACTIVO' | 'LOTE';
+  id: string;
+  motivo: string;
+}

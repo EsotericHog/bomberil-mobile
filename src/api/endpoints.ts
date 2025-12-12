@@ -15,6 +15,7 @@ export const ENDPOINTS = {
     CONSUMIR_STOCK: 'gestion_inventario/movimientos/consumir/',
     BAJA_EXISTENCIA: 'gestion_inventario/movimientos/baja/',
     EXTRAVIO_ACTIVO: 'gestion_inventario/movimientos/extravio/',
+    ANULAR_EXISTENCIA: 'gestion_inventario/movimientos/anular/',
 
     // Rutas Auxiliares / Core
     CORE_UBICACIONES: (soloFisicas: boolean = true) => `gestion_inventario/core/ubicaciones/?solo_fisicas=${soloFisicas}`,
