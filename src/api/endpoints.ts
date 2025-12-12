@@ -25,6 +25,13 @@ export const ENDPOINTS = {
     PRODUCTOS: 'inventario/productos/',
     MOVIMIENTOS: 'inventario/movimientos/',
     EXISTENCIAS: 'inventario/existencias/',
+
+    // --- PRÉSTAMOS ---
+    PRESTAMOS_HISTORIAL: (todos: boolean = false, search: string = '') => `gestion_inventario/prestamos/?todos=${todos}&search=${search}`,
+    PRESTAMOS_DESTINATARIOS: 'gestion_inventario/destinatarios/',
+    PRESTAMOS_BUSCAR_ITEMS: (search: string = '') => `gestion_inventario/prestamo/buscar-prestables/?q=${search}`, // Asumimos param 'q' para búsqueda
+    PRESTAMOS_CREAR: 'gestion_inventario/prestamos/crear/',
+    PRESTAMOS_DEVOLUCION: (id: number) => `gestion_inventario/prestamos/${id}/devolucion/`,
   },
   VOLUNTARIOS: {
     HOJA_VIDA: 'voluntarios/hoja-vida/',
