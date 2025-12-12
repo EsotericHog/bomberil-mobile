@@ -115,3 +115,20 @@ export interface ConsumoStockPayload {
   cantidad: number;
   notas?: string;
 }
+
+export interface BajaPayload {
+  tipo: 'ACTIVO' | 'LOTE'; // El backend espera explícitamente "LOTE"
+  id: string;
+  notas: string;
+}
+
+export interface ExtravioPayload {
+  id: string; // UUID del activo
+  notas: string;
+}
+
+export interface AnularPayload {
+  tipo: 'ACTIVO' | 'LOTE';
+  id: string;
+  motivo: string;
+}

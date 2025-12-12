@@ -9,7 +9,16 @@ import { AppStackParamList } from '@/navigation/types';
 type Props = NativeStackScreenProps<AppStackParamList, 'DetalleExistencia'>;
 
 export default function ExistenciaDetailScreen({ navigation }: Props) {
-  const { currentExistencia, isLoading, clearCurrentExistencia, ajustarStock, consumirStock } = useInventoryStore();
+  const { 
+    currentExistencia, 
+    isLoading, 
+    clearCurrentExistencia, 
+    ajustarStock, 
+    consumirStock, 
+    darDeBajaExistencia, 
+    reportarExtravio, 
+    anularExistencia
+  } = useInventoryStore();
 
   // Estado para Modal de Ajuste de stock
   const [showAjusteModal, setShowAjusteModal] = useState(false);
@@ -20,6 +29,18 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
   const [showConsumoModal, setShowConsumoModal] = useState(false);
   const [cantConsumo, setCantConsumo] = useState('');
   const [notaConsumo, setNotaConsumo] = useState('');
+
+  // Estado para Modal de Baja
+  const [showBajaModal, setShowBajaModal] = useState(false);
+  const [motivoBaja, setMotivoBaja] = useState('');
+
+  // Estados para Modal de Extravío
+  const [showExtravioModal, setShowExtravioModal] = useState(false);
+  const [notaExtravio, setNotaExtravio] = useState('');
+
+  // Estados anular existencia
+  const [showAnularModal, setShowAnularModal] = useState(false);
+  const [motivoAnulacion, setMotivoAnulacion] = useState('');
 
   useEffect(() => {
     return () => clearCurrentExistencia();
@@ -32,6 +53,10 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
       </View>
     );
   }
+
+  const tipoLabel = currentExistencia.tipo_existencia === 'ACTIVO' ? 'ACTIVO SERIALIZADO' : 'LOTE DE INSUMOS';
+  const isActivo = currentExistencia.tipo_existencia === 'ACTIVO';
+  const isDeBaja = currentExistencia.estado === 'DE BAJA';
 
 
 
@@ -99,10 +124,94 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
 
 
 
+  const handleBajaSubmit = async () => {
+    if (!motivoBaja.trim()) {
+      Alert.alert("Requerido", "Debes ingresar el motivo de la baja (Ej: Daño irreparable).");
+      return;
+    }
 
-  // Mapeo seguro del tipo para evitar el error undefined
-  const tipoLabel = currentExistencia.tipo_existencia === 'ACTIVO' ? 'ACTIVO SERIALIZADO' : 'LOTE DE INSUMOS';
-  const isActivo = currentExistencia.tipo_existencia === 'ACTIVO';
+    Alert.alert(
+      "¿Estás seguro?",
+      "Esta acción sacará la existencia del inventario operativo permanentemente.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "Confirmar Baja", 
+          style: "destructive",
+          onPress: async () => {
+            const success = await darDeBajaExistencia(motivoBaja);
+            if (success) {
+              setShowBajaModal(false);
+              setMotivoBaja('');
+              Alert.alert("Existencia dada de baja", "El registro ha sido actualizado correctamente.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+
+
+  const handleExtravioSubmit = async () => {
+    if (!notaExtravio.trim()) {
+      Alert.alert("Requerido", "Debes describir cómo ocurrió el extravío.");
+      return;
+    }
+
+    Alert.alert(
+      "Confirmar Extravío",
+      "Esto marcará el activo como perdido. Si estaba en préstamo, se cerrará el registro.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "Reportar", 
+          style: "destructive",
+          onPress: async () => {
+            const success = await reportarExtravio(notaExtravio);
+            if (success) {
+              setShowExtravioModal(false);
+              setNotaExtravio('');
+              Alert.alert("Reportado", "El activo ha sido marcado como extraviado.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+
+
+  const handleAnularSubmit = async () => {
+    if (!motivoAnulacion.trim()) {
+      Alert.alert("Requerido", "Debes ingresar el motivo (Ej: Error de digitación).");
+      return;
+    }
+
+    Alert.alert(
+      "¿Confirmar Anulación?",
+      "Esta acción reversará el ingreso y dejará el stock en 0. Úsalo solo para correcciones.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "Anular", 
+          style: "destructive",
+          onPress: async () => {
+            const success = await anularExistencia(motivoAnulacion);
+            if (success) {
+              setShowAnularModal(false);
+              setMotivoAnulacion('');
+              Alert.alert("Anulado", "El registro ha sido anulado correctamente.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Validaciones de estado para mostrar botones
+  const isDisponible = currentExistencia.estado === 'DISPONIBLE';
+
 
 
   // Renderizado de cada item del historial
@@ -119,6 +228,19 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
         <Text className="text-xs text-gray-500 mt-1" numberOfLines={1}>
           {mov.usuario} • {mov.tipo === 'SALIDA' ? `Hacia: ${mov.destino}` : `Desde: ${mov.origen}`}
         </Text>
+      </View>
+    </View>
+  );
+
+  // Componente Helper simple
+  const DetailItem = ({ icon, label, value }: { icon: any, label: string, value: string }) => (
+    <View className="flex-row items-center mb-4 last:mb-0">
+      <View className="w-8 items-center">
+        <Feather name={icon} size={18} color="#9ca3af" />
+      </View>
+      <View className="flex-1 ml-2">
+        <Text className="text-gray-400 text-xs font-medium">{label}</Text>
+        <Text className="text-gray-800 font-semibold text-sm">{value}</Text>
       </View>
     </View>
   );
@@ -214,13 +336,11 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
                   </View>
                 </>
               )}
-              {/* BLOQUE DE ACCIÓN PARA LOTES */}
-              {!isActivo && (
+              {/* BOTONES GESTIÓN DE STOCK (Solo Lotes y si NO está de baja) */}
+              {!isActivo && !isDeBaja && (
                 <View className="mt-4 pt-4 border-t border-gray-100">
                   <Text className="text-gray-500 text-xs uppercase font-bold mb-3">Gestión de Stock</Text>
-                  
                   <View className="flex-row justify-between">
-                    {/* Botón CONSUMIR (Principal) */}
                     <TouchableOpacity 
                         onPress={() => setShowConsumoModal(true)}
                         className="bg-orange-600 py-3 rounded-xl flex-row justify-center items-center flex-1 mr-2 shadow-sm"
@@ -229,7 +349,6 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
                         <Text className="text-white font-bold ml-2">Consumir</Text>
                     </TouchableOpacity>
 
-                    {/* Botón AJUSTAR (Secundario / Corrección) */}
                     <TouchableOpacity 
                         onPress={() => {
                             setNuevaCantidad(currentExistencia?.cantidad_actual?.toString() || '0');
@@ -254,6 +373,46 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
                 <Text className="text-gray-400 text-sm italic">No hay movimientos registrados recientes.</Text>
               )}
             </View>
+
+            {/* ZONA DE PELIGRO */}
+            {!isDeBaja && (
+              <View className="mb-10">
+                <Text className="text-red-800 font-bold text-xs uppercase tracking-wider mb-2 ml-1">Ciclo de Vida</Text>
+                
+                <View className="space-y-3">
+                  {/* Botón DAR DE BAJA */}
+                  <TouchableOpacity 
+                    onPress={() => setShowBajaModal(true)}
+                    className="bg-red-50 border border-red-200 p-4 rounded-xl flex-row items-center justify-center"
+                  >
+                    <Feather name="trash-2" size={20} color="#b91c1c" />
+                    <Text className="text-red-700 font-bold ml-2">Dar de Baja Existencia</Text>
+                  </TouchableOpacity>
+
+                  {/* Botón EXTRAVÍO (Solo Activos) */}
+                  {isActivo && (
+                    <TouchableOpacity 
+                      onPress={() => setShowExtravioModal(true)}
+                      className="bg-orange-50 border border-orange-200 p-4 rounded-xl flex-row items-center justify-center mt-3"
+                    >
+                      <Feather name="help-circle" size={20} color="#c2410c" />
+                      <Text className="text-orange-700 font-bold ml-2">Reportar Extravío</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Botón ANULAR (Solo si está DISPONIBLE) */}
+                  {isDisponible && (
+                    <TouchableOpacity 
+                      onPress={() => setShowAnularModal(true)}
+                      className="bg-gray-100 border border-gray-300 p-4 rounded-xl flex-row items-center justify-center mt-3"
+                    >
+                      <Feather name="x-circle" size={20} color="#4b5563" />
+                      <Text className="text-gray-700 font-bold ml-2">Anular Registro (Error)</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
 
           </View>
         </ScrollView>
@@ -385,6 +544,158 @@ export default function ExistenciaDetailScreen({ navigation }: Props) {
         </KeyboardAvoidingView>
       </Modal>
 
+
+
+
+      {/* --- MODAL DE BAJA --- */}
+      <Modal animationType="fade" transparent={true} visible={showBajaModal} onRequestClose={() => setShowBajaModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1 justify-center bg-black/80 px-6">
+          <View className="bg-white rounded-2xl p-6">
+            <View className="items-center mb-4">
+              <View className="bg-red-100 p-3 rounded-full mb-3">
+                <Feather name="alert-triangle" size={32} color="#dc2626" />
+              </View>
+              <Text className="text-xl font-bold text-gray-900 text-center">Dar de Baja</Text>
+              <Text className="text-gray-500 text-center text-sm mt-1 px-2">
+                Estás a punto de retirar este ítem del inventario operativo permanentemente.
+              </Text>
+            </View>
+
+            <Text className="text-gray-700 font-bold mb-2 text-sm">Motivo de la baja *</Text>
+            <TextInput 
+              className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mb-6 h-24 text-gray-800"
+              placeholder="Ej: Daño estructural por caída, fin de vida útil..."
+              multiline
+              textAlignVertical="top"
+              value={motivoBaja}
+              onChangeText={setMotivoBaja}
+              autoFocus
+            />
+
+            <View className="flex-row gap-3">
+              <TouchableOpacity 
+                onPress={() => setShowBajaModal(false)}
+                className="flex-1 bg-gray-200 py-3 rounded-xl items-center"
+              >
+                <Text className="text-gray-700 font-bold">Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                onPress={handleBajaSubmit}
+                className="flex-1 bg-red-600 py-3 rounded-xl items-center shadow-sm"
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text className="text-white font-bold">Confirmar Baja</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+
+
+
+      {/* --- MODAL DE EXTRAVÍO --- */}
+      <Modal animationType="fade" transparent={true} visible={showExtravioModal} onRequestClose={() => setShowExtravioModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1 justify-center bg-black/80 px-6">
+          <View className="bg-white rounded-2xl p-6">
+            <View className="items-center mb-4">
+              <View className="bg-orange-100 p-3 rounded-full mb-3">
+                <Feather name="eye-off" size={32} color="#c2410c" />
+              </View>
+              <Text className="text-xl font-bold text-gray-900 text-center">Reportar Extravío</Text>
+              <Text className="text-gray-500 text-center text-sm mt-1 px-2">
+                Utiliza esto solo si el activo se perdió accidentalmente (incendio, robo, caída).
+              </Text>
+            </View>
+
+            <Text className="text-gray-700 font-bold mb-2 text-sm">Detalles del suceso *</Text>
+            <TextInput 
+              className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mb-6 h-24 text-gray-800"
+              placeholder="Ej: Se cayó al río durante el ejercicio..."
+              multiline
+              textAlignVertical="top"
+              value={notaExtravio}
+              onChangeText={setNotaExtravio}
+              autoFocus
+            />
+
+            <View className="flex-row gap-3">
+              <TouchableOpacity 
+                onPress={() => setShowExtravioModal(false)}
+                className="flex-1 bg-gray-200 py-3 rounded-xl items-center"
+              >
+                <Text className="text-gray-700 font-bold">Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                onPress={handleExtravioSubmit}
+                className="flex-1 bg-orange-600 py-3 rounded-xl items-center shadow-sm"
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text className="text-white font-bold">Reportar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+
+
+
+      {/* --- MODAL DE ANULACIÓN --- */}
+      <Modal animationType="fade" transparent={true} visible={showAnularModal} onRequestClose={() => setShowAnularModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1 justify-center bg-black/80 px-6">
+          <View className="bg-white rounded-2xl p-6">
+            <View className="items-center mb-4">
+              <View className="bg-gray-200 p-3 rounded-full mb-3">
+                <Feather name="rotate-ccw" size={32} color="#374151" />
+              </View>
+              <Text className="text-xl font-bold text-gray-900 text-center">Anular Registro</Text>
+              <Text className="text-gray-500 text-center text-sm mt-1 px-2">
+                Utiliza esto si ingresaste el ítem por error (ej: código incorrecto, duplicado).
+              </Text>
+            </View>
+
+            <Text className="text-gray-700 font-bold mb-2 text-sm">Motivo del error *</Text>
+            <TextInput 
+              className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mb-6 h-20 text-gray-800"
+              placeholder="Ej: Error de digitación en código..."
+              multiline
+              textAlignVertical="top"
+              value={motivoAnulacion}
+              onChangeText={setMotivoAnulacion}
+              autoFocus
+            />
+
+            <View className="flex-row gap-3">
+              <TouchableOpacity 
+                onPress={() => setShowAnularModal(false)}
+                className="flex-1 bg-gray-200 py-3 rounded-xl items-center"
+              >
+                <Text className="text-gray-700 font-bold">Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                onPress={handleAnularSubmit}
+                className="flex-1 bg-gray-800 py-3 rounded-xl items-center shadow-sm"
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text className="text-white font-bold">Confirmar Anular</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
 
 
