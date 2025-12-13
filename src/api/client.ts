@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { useAuthStore } from '@/store/authStore';
 import { tokenStorage } from '@/utils/storage';
 import { ENDPOINTS } from './endpoints';
 
@@ -16,13 +15,31 @@ const client = axios.create({
   },
 });
 
+// --- INYECCIÓN DEL STORE ---
+let store: any = null;
+export const injectStore = (_store: any) => {
+  store = _store;
+};
 
-// 1. Interceptor de Request
+// --- COLA DE PETICIONES ---
+let isRefreshing = false;
+let failedQueue: any[] = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+// --- INTERCEPTOR REQUEST ---
 client.interceptors.request.use(async (config) => {
-  // Intentamos leer del store
-  let token = useAuthStore.getState().token;
+  let token = store?.getState().token;
   
-  // FAILSAFE: Si el store está vacío (arranque), leemos del disco
   if (!token) {
     token = await tokenStorage.getToken();
   }
@@ -31,56 +48,108 @@ client.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
-});
+}, (error) => Promise.reject(error));
 
-
-// 2. Interceptor de Response
+// --- INTERCEPTOR RESPONSE ---
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // Si el error es 401 (No autorizado) y no es un reintento
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true; // Marcamos para no entrar en bucle infinito
+    if (!error.response || !originalRequest) {
+      return Promise.reject(error);
+    }
+
+    // Evitar bucles infinitos en logout
+    if (originalRequest.url?.includes('auth/logout')) {
+        return Promise.reject(error);
+    }
+
+    const status = error.response.status;
+
+    // Detectamos 401 (Token inválido) o 403 (Permiso denegado por token expirado en algunos backends)
+    if ((status === 401 || status === 403) && !originalRequest._retry) {
+      
+      if (isRefreshing) {
+        // Si ya estamos refrescando, encolamos esta petición
+        return new Promise(function(resolve, reject) {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          originalRequest.headers.Authorization = 'Bearer ' + token;
+          return client(originalRequest);
+        }).catch(err => {
+          return Promise.reject(err);
+        });
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
 
       try {
-        // Obtenemos el refresh token del store
-        let refreshToken = useAuthStore.getState().refreshToken;
-        
+        // 1. Obtener Refresh Token (Memoria > Disco)
+        let refreshToken = store?.getState().refreshToken;
         if (!refreshToken) {
+            console.log('[Auth] Refresh token no en memoria, buscando en storage...');
             refreshToken = await tokenStorage.getRefreshToken();
         }
-        
+
         if (!refreshToken) {
-            throw new Error('No hay refresh token disponible ni en memoria ni en disco');
+            console.log('[Auth] No refresh token available. Force Logout.');
+            throw new Error('No refresh token');
         }
 
-        // Llamamos al endpoint de refresh (usamos axios puro para evitar interceptores circulares)
-        const response = await axios.post(`${API_URL}${ENDPOINTS.AUTH.REFRESH}`, {
-          refresh: refreshToken
-        });
+        console.log('[Auth] Refreshing token ending in:', refreshToken.slice(-5));
+
+        // 2. Petición de Refresh (Axios puro para evitar interceptores)
+        const response = await axios.post(
+            `${API_URL}${ENDPOINTS.AUTH.REFRESH}`, 
+            { refresh: refreshToken },
+            { headers: { 'Content-Type': 'application/json' } }
+        );
+
+        const { access, refresh } = response.data;
         
-        // Obtener datos de la respuesta del servidor
-        const newData = response.data;
+        console.log('[Auth] Refresh success. New Access received.');
+        if (refresh) console.log('[Auth] New Refresh token received (Rotation ON).');
+        else console.log('[Auth] No new Refresh token received (Rotation OFF).');
 
-        // Guardamos todo en el store para sincronizar
-        useAuthStore.getState().signIn(newData); // Usamos signIn que ya actualiza todo
+        // 3. Actualizar Store y Storage
+        if (store) {
+            await store.getState().setTokens({ access, refresh });
+        } else {
+            // Fallback por si el store no se inyectó (no debería pasar)
+            await tokenStorage.setToken(access);
+            if (refresh) await tokenStorage.setRefreshToken(refresh);
+        }
 
-        // Actualizamos el header de la petición original y reintentamos
-        originalRequest.headers.Authorization = `Bearer ${newData.access}`;
+        // 4. Procesar la cola
+        processQueue(null, access);
+        
+        // 5. Reintentar la petición original con el nuevo token
+        // Fix para Axios modernos: usar set si existe, o asignación directa
+        if (originalRequest.headers.set) {
+            originalRequest.headers.set('Authorization', `Bearer ${access}`);
+        } else {
+            originalRequest.headers['Authorization'] = `Bearer ${access}`;
+        }
+        
         return client(originalRequest);
 
-      } catch (refreshError) {
-        // Si el refresh falla (token vencido o inválido), cerramos sesión
-        console.log('Sesión expirada definitivamente, limpiando...');
-        // Evitamos bucles llamando directamente a limpiar storage si el store falla
+      } catch (refreshError: any) {
+        processQueue(refreshError, null);
+        console.log('[Auth] Refresh FAILED:', refreshError.response?.data || refreshError.message);
+        
+        // Si falla el refresco, sesión muerta: Limpiar todo
         await tokenStorage.removeToken();
         await tokenStorage.removeRefreshToken();
-        useAuthStore.getState().signOut();
+        store?.getState().signOut();
+        
         return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
+
     return Promise.reject(error);
   }
 );

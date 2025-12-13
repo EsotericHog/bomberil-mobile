@@ -53,6 +53,7 @@ interface AuthState {
   signIn: (data: LoginResponse) => Promise<void>;
   signOut: () => Promise<void>;
   setAccessToken: (newToken: string) => Promise<void>;
+  setTokens: (tokens: { access: string; refresh?: string }) => Promise<void>;
   hasPermission: (perm: string) => boolean;
   restoreSession: () => Promise<void>;
 
@@ -99,10 +100,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 
-  // Acción ligera para refrescar solo el access token
+  // Acción ligera para refrescar solo el access token (YA NO SE USA)
   setAccessToken: async (newToken: string) => {
     await tokenStorage.setToken(newToken);
     set({ token: newToken });
+  },
+
+  setTokens: async ({ access, refresh }) => {
+    console.log('[AuthStore] Updating tokens in storage...');
+    await tokenStorage.setToken(access);
+    
+    if (refresh) {
+      await tokenStorage.setRefreshToken(refresh);
+      set({ token: access, refreshToken: refresh });
+      console.log('[AuthStore] Access & Refresh updated.');
+    } else {
+      set({ token: access });
+      console.log('[AuthStore] Only Access updated.');
+    }
   },
 
   // --- ACCIÓN: CERRAR SESIÓN ---
@@ -110,7 +125,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       // 1. Obtener el refresh token actual del estado
       const refreshToken = get().refreshToken;
-      if (refreshToken) await client.post(ENDPOINTS.AUTH.LOGOUT, { refresh: refreshToken });
+      if (refreshToken) {
+          // Intentamos notificar al backend, pero no bloqueamos el cierre local si falla
+          await client.post(ENDPOINTS.AUTH.LOGOUT, { refresh: refreshToken }).catch(err => console.log('Logout API failed (expected if token expired)'));
+      }
     } catch (e) {
       console.log("Error logout:", e);
     } finally {
@@ -137,6 +155,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return;
       }
 
+      // Validamos el token obteniendo el perfil
       const response = await client.get(ENDPOINTS.AUTH.ME);
       const data = response.data;
       const shouldLock = isBioEnabled;
@@ -154,7 +173,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       
     } catch (error) {
-      console.log('Error session:', error);
+      console.log('[Auth] Session restore failed:', error);
+      // Si falla incluso el refresh, limpiamos
       await get().signOut();
       set({ isLoading: false });
     }
