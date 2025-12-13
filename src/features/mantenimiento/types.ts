@@ -6,10 +6,10 @@ export type AccionOrden = 'iniciar' | 'finalizar' | 'cancelar';
 // Resumen para la lista (MantenimientoOrdenListAPIView)
 export interface OrdenResumen {
   id: number;
-  titulo: string;
-  tipo: string; // Display name
+  titulo: string; // Calculado por backend
+  tipo: string;
   tipo_codigo: TipoOrden;
-  estado: string; // Display name
+  estado: string;
   estado_codigo: EstadoOrden;
   fecha_programada: string;
   responsable: string;
@@ -34,7 +34,7 @@ export interface OrdenDetalleFull {
   cabecera: {
     id: number;
     titulo: string;
-    descripcion: string;
+    descripcion: string; // Calculado por backend ("Orden generada manualmente")
     tipo: string;
     estado: string;
     estado_codigo: EstadoOrden;
@@ -52,8 +52,8 @@ export interface OrdenDetalleFull {
 
 // Payloads
 export interface CrearOrdenPayload {
-  descripcion: string; // Obligatorio
-  fecha_programada?: string; // YYYY-MM-DD
+  descripcion: string; // Se envía para auditoría
+  fecha_programada?: string;
   responsable_id?: number;
 }
 

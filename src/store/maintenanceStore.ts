@@ -63,11 +63,13 @@ export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
   crearOrden: async (payload) => {
     set({ isLoading: true });
     try {
+      // Backend espera: { descripcion, fecha_programada, ... }
       const response = await client.post(ENDPOINTS.MANTENIMIENTO.CREAR_ORDEN, payload);
       set({ isLoading: false });
-      return response.data.id; // Backend devuelve { "id": 123, ... }
+      return response.data.id;
     } catch (error: any) {
-      Alert.alert("Error", error.response?.data?.detail || "Error al crear orden");
+      const msg = error.response?.data?.detail || "Error al crear la orden";
+      Alert.alert("Error", msg);
       set({ isLoading: false });
       return null;
     }
