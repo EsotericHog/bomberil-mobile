@@ -55,6 +55,19 @@ export const ENDPOINTS = {
     // Registrar Tarea: /api/v1/gestion_mantenimiento/ordenes/<pk>/registrar-tarea/
     REGISTRAR_TAREA: (id: number) => `gestion_mantenimiento/ordenes/${id}/registrar-tarea/`,
   },
+  USUARIOS: {
+    // Lista: /api/v1/gestion_usuarios/lista/?q=...
+    LISTA: (q: string = '', rol?: string) => `gestion_usuarios/lista/?q=${q}${rol ? `&rol=${rol}` : ''}`,
+    
+    // Detalle: /api/v1/usuarios/<uuid>/detalle/
+    DETALLE: (id: string) => `gestion_usuarios/${id}/detalle/`,
+    
+    // Hoja Vida: /api/v1/voluntarios/<uuid>/hoja-vida/
+    HOJA_VIDA: (id: string) => `gestion_usuarios/${id}/hoja-vida/`,
+    
+    // Ficha Médica: /api/v1/usuarios/<uuid>/ficha-medica/
+    FICHA_MEDICA: (id: string) => `gestion_usuarios/${id}/ficha-medica/`,
+  },
   DOCUMENTAL: {
     // URL: /api/v1/documental/documentos/?q=acta&tipo=1
     LISTA_DOCUMENTOS: (q: string = '', tipo?: number) => 
