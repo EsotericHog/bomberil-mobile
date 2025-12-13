@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useMaintenanceStore } from '@/store/maintenanceStore';
+import { useAuthStore } from '@/store/authStore';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '@/navigation/types';
 import { ItemOrden, ActivoBusquedaOrden } from './types';
@@ -25,25 +26,37 @@ type Props = NativeStackScreenProps<AppStackParamList, 'DetalleOrden'>;
 
 export default function DetalleOrdenScreen({ navigation, route }: Props) {
   const { id } = route.params;
+  
+  // Store de Mantenimiento
   const { 
     currentOrden, isLoading, activosBusqueda, 
     fetchDetalleOrden, cambiarEstadoOrden, 
     buscarActivosParaOrden, anadirActivoAOrden, quitarActivoDeOrden,
-    registrarTarea,
+    registrarTarea, fetchActivoByCodeForOrder,
     clearCurrentOrden, clearBusqueda 
   } = useMaintenanceStore();
 
+  // Store de Auth (para el prefijo de estación)
+  const { estacion } = useAuthStore();
+
+  // Estados Locales: Búsqueda Catálogo
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
 
-  // ESTADOS PARA TAREAS (EJECUCIÓN)
+  // Estados Locales: Búsqueda Inteligente (Manual)
+  const [showSmartModal, setShowSmartModal] = useState(false);
+  const [smartInput, setSmartInput] = useState('');
+
+  // Estados Locales: Tareas (Ejecución)
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedActivo, setSelectedActivo] = useState<ItemOrden | null>(null);
   const [taskNotes, setTaskNotes] = useState('');
   const [taskSuccess, setTaskSuccess] = useState(true);
 
-  // Carga inicial y limpieza
+  // --- EFECTOS ---
+
+  // 1. Carga inicial y limpieza
   useEffect(() => {
     fetchDetalleOrden(id);
     return () => {
@@ -52,7 +65,17 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
     };
   }, [id]);
 
-  // Manejo de búsqueda de activos (Debounce manual)
+  // 2. Escucha del retorno del Escáner
+  useEffect(() => {
+    if (route.params?.scannedCode) {
+      const code = route.params.scannedCode;
+      // Limpiamos el parámetro para evitar bucles
+      navigation.setParams({ scannedCode: undefined });
+      processCode(code);
+    }
+  }, [route.params?.scannedCode]);
+
+  // 3. Debounce para búsqueda en catálogo
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (showAddModal && searchQuery.length > 2) {
@@ -63,7 +86,35 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
     return () => clearTimeout(timeout);
   }, [searchQuery, showAddModal]);
 
-  // --- ACCIONES FASE 4 (Planificación) ---
+  // --- LÓGICA DE BÚSQUEDA INTELIGENTE / ESCÁNER ---
+
+  const formatCode = (input: string): string => {
+    const raw = input.trim().toUpperCase();
+    if (raw.includes('-') && raw.length > 8) return raw; // Ya es código completo
+
+    // Construir: {COD_ESTACION}-ACT-{NUMERO}
+    const stationCode = estacion?.codigo || `E${estacion?.id.toString().padStart(3, '0')}`;
+    const numberPart = raw.padStart(5, '0');
+    return `${stationCode}-ACT-${numberPart}`;
+  };
+
+  const processCode = async (code: string) => {
+    const finalCode = formatCode(code);
+    
+    // Usamos la nueva función del store que devuelve el objeto activo sin alterar la lista de búsqueda global
+    const activo = await fetchActivoByCodeForOrder(id, finalCode);
+    
+    if (activo) {
+        handleAddActivo(activo);
+        setShowSmartModal(false);
+        setSmartInput('');
+    } else {
+        Alert.alert("No disponible", `El activo ${finalCode} no se encontró disponible para esta orden.`);
+    }
+  };
+
+  // --- HANDLERS FASE 4 (Planificación) ---
+
   const handleIniciarOrden = () => {
     if (!currentOrden) return;
     if (currentOrden.items.length === 0) {
@@ -86,8 +137,6 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
   };
 
   const handleAddActivo = async (activo: ActivoBusquedaOrden) => {
-    // Nota: El backend espera 'id' numérico o string según tu modelo.
-    // Aquí asumimos que anadirActivoAOrden maneja la conversión.
     const success = await anadirActivoAOrden(id, activo.id.toString());
     if (success) {
       // Feedback opcional (Toast)
@@ -109,7 +158,8 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
     );
   };
 
-  // --- ACCIONES FASE 5 (Ejecución) ---
+  // --- HANDLERS FASE 5 (Ejecución) ---
+
   const handleFinalizarOrden = () => {
     const pendientes = currentOrden?.items.filter(i => i.estado_trabajo !== 'COMPLETADO').length || 0;
     
@@ -160,6 +210,8 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
       setSelectedActivo(null);
     }
   };
+
+  // --- RENDERIZADO ---
 
   if (isLoading && !currentOrden) {
     return (
@@ -222,24 +274,45 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
            </View>
         </View>
 
-        {/* LISTA DE ACTIVOS (PLANIFICACIÓN & EJECUCIÓN) */}
-        <View className="flex-row justify-between items-center mb-3">
-           <Text className="text-xs font-bold text-gray-400 uppercase">
-              Activos Asignados ({items.length})
-           </Text>
-           {isPendiente && (
-              <TouchableOpacity 
-                 onPress={() => setShowAddModal(true)}
-                 className="flex-row items-center bg-purple-50 px-3 py-1.5 rounded-full border border-purple-100"
-              >
-                 <Feather name="plus" size={14} color="#7e22ce" />
-                 <Text className="text-purple-700 font-bold ml-1 text-xs">Añadir</Text>
-              </TouchableOpacity>
-           )}
-        </View>
+        {/* LISTA DE ACTIVOS: TÍTULO Y BARRA DE ACCIONES */}
+        <Text className="text-xs font-bold text-gray-400 uppercase mb-2">
+            Activos Asignados ({items.length})
+        </Text>
 
+        {/* Solo mostramos la barra de acciones si está PENDIENTE */}
+        {isPendiente && (
+            <View className="flex-row justify-between mb-4">
+                {/* 1. Botón ESCÁNER */}
+                <TouchableOpacity 
+                    onPress={() => navigation.navigate('ScannerInventario', { returnScreen: 'DetalleOrden' })}
+                    className="flex-1 bg-gray-800 p-3 rounded-xl mr-2 flex-row justify-center items-center shadow-sm"
+                >
+                    <Feather name="camera" size={18} color="white" />
+                    <Text className="text-white font-bold ml-2 text-xs">Escanear</Text>
+                </TouchableOpacity>
+
+                {/* 2. Botón MANUAL INTELIGENTE */}
+                <TouchableOpacity 
+                    onPress={() => setShowSmartModal(true)}
+                    className="flex-1 bg-white border border-gray-200 p-3 rounded-xl mr-2 flex-row justify-center items-center shadow-sm"
+                >
+                    <Feather name="hash" size={18} color="#374151" />
+                    <Text className="text-gray-700 font-bold ml-2 text-xs">Manual</Text>
+                </TouchableOpacity>
+
+                {/* 3. Botón CATÁLOGO (Lupa) */}
+                <TouchableOpacity 
+                    onPress={() => setShowAddModal(true)}
+                    className="bg-white border border-gray-200 p-3 rounded-xl flex-row justify-center items-center shadow-sm"
+                >
+                    <Feather name="list" size={18} color="#374151" />
+                </TouchableOpacity>
+            </View>
+        )}
+
+        {/* RENDERIZADO DE ITEMS */}
         {items.length === 0 ? (
-           <View className="border-2 border-dashed border-gray-200 rounded-xl p-8 items-center mb-4">
+           <View className="border-2 border-dashed border-gray-200 rounded-xl p-8 items-center mb-4 bg-gray-50/50">
               <Feather name="tool" size={32} color="#d1d5db" />
               <Text className="text-gray-400 text-sm mt-2 text-center">
                  No hay activos en esta orden.{'\n'}Agrega los equipos a reparar.
@@ -249,7 +322,7 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
             items.map((item) => (
                   <TouchableOpacity 
                      key={item.id} 
-                     // Si está EN_CURSO y NO completado, permitir click para registrar.
+                     // Si está EN_CURSO y NO completado, permitir click para registrar. Si es PENDIENTE, nada (o borrar).
                      disabled={!(isEnCurso && item.estado_trabajo !== 'COMPLETADO')}
                      onPress={() => handleOpenTaskModal(item)}
                      activeOpacity={0.7}
@@ -257,6 +330,7 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
                         item.estado_trabajo === 'COMPLETADO' ? 'border-green-100 opacity-80' : 'border-gray-100'
                      }`}
                   >
+                     {/* Imagen / Icono */}
                      <View className="w-10 h-10 bg-gray-50 rounded-lg justify-center items-center mr-3 overflow-hidden">
                         {item.imagen_url ? (
                            <Image source={{ uri: item.imagen_url }} className="w-full h-full" resizeMode="cover" />
@@ -265,13 +339,14 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
                         )}
                      </View>
                      
+                     {/* Datos Activo */}
                      <View className="flex-1">
                         <Text className="font-bold text-gray-800 text-sm" numberOfLines={1}>{item.nombre}</Text>
                         <Text className="text-xs text-gray-500">{item.codigo}</Text>
                         <Text className="text-[10px] text-gray-400" numberOfLines={1}>{item.ubicacion}</Text>
                      </View>
 
-                     {/* ACCIONES POR FILA */}
+                     {/* Estado / Acciones Individuales */}
                      <View className="ml-2">
                         {isPendiente && (
                             <TouchableOpacity onPress={() => handleRemoveActivo(item)} className="p-2">
@@ -309,7 +384,7 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
         <View className="h-24" />
       </ScrollView>
 
-      {/* FOOTER ACTIONS */}
+      {/* FOOTER ACTIONS: PENDIENTE (INICIAR) */}
       {isPendiente && (
          <View className="p-4 bg-white border-t border-gray-100 absolute bottom-0 left-0 right-0">
             <TouchableOpacity 
@@ -327,6 +402,7 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
          </View>
       )}
 
+      {/* FOOTER ACTIONS: EN CURSO (FINALIZAR) */}
       {isEnCurso && (
          <View className="p-4 bg-white border-t border-gray-100 absolute bottom-0 left-0 right-0">
             <TouchableOpacity 
@@ -344,7 +420,7 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
          </View>
       )}
 
-      {/* MODAL BÚSQUEDA ACTIVOS */}
+      {/* --- MODAL 1: CATÁLOGO DE BÚSQUEDA --- */}
       <Modal visible={showAddModal} animationType="slide" presentationStyle="pageSheet">
          <View className="flex-1 bg-white">
             <View className="px-4 py-3 border-b border-gray-100 flex-row justify-between items-center bg-gray-50">
@@ -400,7 +476,57 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
          </View>
       </Modal>
 
-      {/* MODAL REGISTRO DE TAREA */}
+      {/* --- MODAL 2: BÚSQUEDA INTELIGENTE (MANUAL) --- */}
+      <Modal animationType="slide" transparent={true} visible={showSmartModal} onRequestClose={() => setShowSmartModal(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 justify-end">
+          <View className="flex-1 bg-black/50">
+            <TouchableOpacity className="flex-1" onPress={() => setShowSmartModal(false)} />
+            <View className="bg-white rounded-t-3xl p-6 pb-10 shadow-xl">
+              
+              <View className="flex-row justify-between items-center mb-4">
+                <Text className="text-xl font-bold text-gray-800">Agregar Activo</Text>
+                <TouchableOpacity onPress={() => setShowSmartModal(false)} className="p-2 bg-gray-100 rounded-full">
+                  <Feather name="x" size={20} color="#4b5563" />
+                </TouchableOpacity>
+              </View>
+
+              <Text className="text-gray-500 text-xs mb-2">Ingresa el correlativo del activo (Ej: 32)</Text>
+
+              <View className="flex-row items-center border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 mb-6 focus:border-purple-700 focus:bg-white">
+                <Text className="text-gray-400 font-bold mr-2 text-lg">
+                    {estacion?.codigo || 'E00X'}-ACT-
+                </Text>
+                <TextInput
+                  className="flex-1 text-xl font-bold text-gray-900"
+                  placeholder="00000"
+                  value={smartInput}
+                  onChangeText={setSmartInput}
+                  keyboardType="numeric"
+                  autoFocus={true}
+                  maxLength={5}
+                  onSubmitEditing={() => processCode(smartInput)}
+                />
+              </View>
+
+              <TouchableOpacity 
+                onPress={() => processCode(smartInput)}
+                disabled={isLoading}
+                className={`w-full py-4 rounded-xl flex-row justify-center items-center ${isLoading ? 'bg-gray-400' : 'bg-purple-700'}`}
+              >
+                {isLoading ? <ActivityIndicator color="white" /> : (
+                  <>
+                    <Feather name="plus-circle" size={20} color="white" />
+                    <Text className="text-white font-bold text-lg ml-2">Agregar a la Orden</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* --- MODAL 3: REGISTRO DE TAREA (EJECUCIÓN) --- */}
       <Modal visible={showTaskModal} animationType="slide" transparent>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} className="flex-1 justify-end bg-black/50">
            <View className="bg-white rounded-t-3xl p-6 pb-10">

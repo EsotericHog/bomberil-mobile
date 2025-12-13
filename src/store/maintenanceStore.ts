@@ -17,6 +17,7 @@ interface MaintenanceState {
   // Acciones
   fetchOrdenes: (estado?: 'activos' | 'historial', q?: string) => Promise<void>;
   fetchDetalleOrden: (id: number) => Promise<void>;
+  fetchActivoByCodeForOrder: (ordenId: number, code: string) => Promise<ActivoBusquedaOrden | null>;
   crearOrden: (payload: CrearOrdenPayload) => Promise<number | null>; // Retorna ID si éxito
   
   cambiarEstadoOrden: (id: number, accion: AccionOrden) => Promise<boolean>;
@@ -57,6 +58,28 @@ export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
     } catch (error) {
       console.log("Error fetchDetalleOrden", error);
       set({ error: "Error cargando detalle", isLoading: false });
+    }
+  },
+
+  fetchActivoByCodeForOrder: async (ordenId, code) => {
+    set({ isLoading: true });
+    try {
+      // Reutilizamos el endpoint de búsqueda
+      const response = await client.get(ENDPOINTS.MANTENIMIENTO.BUSCAR_ACTIVO(ordenId, code));
+      const results = response.data.results || [];
+      
+      set({ isLoading: false });
+
+      if (Array.isArray(results) && results.length > 0) {
+        // Priorizar coincidencia exacta
+        const exactMatch = results.find((i: any) => i.codigo.toUpperCase() === code.toUpperCase());
+        return exactMatch || results[0];
+      }
+      return null;
+    } catch (error) {
+      console.log("Error fetching active by code:", error);
+      set({ isLoading: false });
+      return null;
     }
   },
 

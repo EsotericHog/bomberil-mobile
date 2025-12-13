@@ -25,7 +25,7 @@ export type AppStackParamList = {
   // MANTENIMIENTO
   MantenimientoList: undefined;
   CrearOrden: undefined;
-  DetalleOrden: { id: number };
+  DetalleOrden: { id: number; scannedCode?: string };
   
   VoluntariosHome: undefined; // Módulo Voluntarios
   FichaMedica: { voluntarioId?: number }; // Módulo Médico
