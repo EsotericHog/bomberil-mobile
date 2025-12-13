@@ -148,7 +148,7 @@ export default function DashboardScreen({ navigation }: Props) {
             icon="book-open"
             color="bg-amber-500"
             disabled={!puedeVerDocumentacion}
-            onPress={() => Alert.alert("Próximamente", "El módulo de biblioteca estará disponible en la siguiente versión.")}
+            onPress={() => navigation.navigate('DocumentalList')} 
           />
 
           <Text className="text-gray-400 font-bold mb-4 mt-4 uppercase text-xs tracking-wider ml-1">

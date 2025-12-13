@@ -17,6 +17,7 @@ import DetallePrestamoScreen from '@/features/inventario/prestamos/DetallePresta
 import MantenimientoListScreen from '@/features/mantenimiento/MantenimientoListScreen';
 import CrearOrdenScreen from '@/features/mantenimiento/CrearOrdenScreen';
 import DetalleOrdenScreen from '@/features/mantenimiento/DetalleOrdenScreen';
+import DocumentalListScreen from '@/features/documental/DocumentalListScreen';
 import PerfilScreen from '@/features/perfil/PerfilScreen';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
@@ -95,6 +96,11 @@ export const AppNavigator = () => {
         name="DetalleOrden" 
         component={DetalleOrdenScreen} 
         options={{ headerShown: false }} // Usamos header custom en la pantalla
+      />
+      <Stack.Screen 
+        name="DocumentalList" 
+        component={DocumentalListScreen} 
+        options={{ title: 'Biblioteca Digital' }} 
       />
       <Stack.Screen 
         name="MiPerfil" 
