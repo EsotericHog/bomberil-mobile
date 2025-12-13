@@ -33,6 +33,28 @@ export const ENDPOINTS = {
     PRESTAMOS_CREAR: 'gestion_inventario/prestamos/crear/',
     PRESTAMOS_DEVOLUCION: (id: number) => `gestion_inventario/prestamos/${id}/devolucion/`,
   },
+  MANTENIMIENTO: {
+    // Lista: /api/v1/mantenimiento/ordenes/?estado=activos&q=...
+    LISTA_ORDENES: (estado: 'activos' | 'historial' = 'activos', q: string = '') => 
+      `gestion_mantenimiento/ordenes/?estado=${estado}&q=${q}`,
+    
+    // Crear: /api/v1/mantenimiento/ordenes/crear/
+    CREAR_ORDEN: 'gestion_mantenimiento/ordenes/crear/',
+    
+    // Detalle: /api/v1/mantenimiento/ordenes/<pk>/detalle/
+    DETALLE_ORDEN: (id: number) => `gestion_mantenimiento/ordenes/${id}/detalle/`,
+    
+    // Acciones Globales: /api/v1/gestion_mantenimiento/ordenes/<pk>/cambiar-estado/
+    CAMBIAR_ESTADO: (id: number) => `gestion_mantenimiento/ordenes/${id}/cambiar-estado/`,
+    
+    // Gestión Activos:
+    BUSCAR_ACTIVO: (ordenId: number, q: string) => `gestion_mantenimiento/ordenes/buscar-activo/?orden_id=${ordenId}&q=${q}`,
+    ANADIR_ACTIVO: (id: number) => `gestion_mantenimiento/ordenes/${id}/anadir-activo/`,
+    QUITAR_ACTIVO: (id: number) => `gestion_mantenimiento/ordenes/${id}/quitar-activo/`,
+    
+    // Registrar Tarea: /api/v1/gestion_mantenimiento/ordenes/<pk>/registrar-tarea/
+    REGISTRAR_TAREA: (id: number) => `gestion_mantenimiento/ordenes/${id}/registrar-tarea/`,
+  },
   VOLUNTARIOS: {
     HOJA_VIDA: 'voluntarios/hoja-vida/',
     FICHA_MEDICA: 'voluntarios/ficha-medica/',
