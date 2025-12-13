@@ -17,9 +17,15 @@ export type AppStackParamList = {
   DetalleExistencia: { sku: string }; // Ejemplo de paso de parámetros
   RecepcionStock: undefined;
 
+  // PRÉSTAMOS
   PrestamosHome: undefined;
   CrearPrestamo: { scannedCode?: string } | undefined;
   DetallePrestamo: { id: number };
+
+  // MANTENIMIENTO
+  MantenimientoList: undefined;
+  CrearOrden: undefined;
+  DetalleOrden: { id: number; scannedCode?: string };
   
   VoluntariosHome: undefined; // Módulo Voluntarios
   FichaMedica: { voluntarioId?: number }; // Módulo Médico
