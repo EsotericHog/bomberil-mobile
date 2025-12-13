@@ -13,11 +13,14 @@ export default function PerfilScreen({ navigation }: Props) {
     user, 
     estacion, 
     signOut, 
-    // Variables biométricas del Store
+    // Variables biométricas
     isBiometricSupported, 
     isBiometricEnabled, 
     checkBiometrics, 
-    toggleBiometrics 
+    toggleBiometrics, 
+    // Acciones de descarga
+    downloadHojaVida,
+    downloadFichaMedica
   } = useAuthStore();
 
   const [isSwitchLoading, setSwitchLoading] = useState(false);
@@ -29,10 +32,8 @@ export default function PerfilScreen({ navigation }: Props) {
 
   const handleBiometricToggle = async (value: boolean) => {
     setSwitchLoading(true);
-    // toggleBiometrics ya maneja la confirmación con huella internamente
     const success = await toggleBiometrics(value);
     if (!success && value) {
-      // Si intentó activar pero falló la huella
       Alert.alert("Error", "No se pudo verificar tu identidad.");
     }
     setSwitchLoading(false);
@@ -116,7 +117,6 @@ export default function PerfilScreen({ navigation }: Props) {
           </View>
 
           {/* --- SECCIÓN: SEGURIDAD (BIOMETRÍA) --- */}
-          {/* Solo mostramos esta tarjeta si el celular soporta huella/faceID */}
           {isBiometricSupported && (
             <View className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6">
               <Text className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-4">Seguridad</Text>
@@ -129,7 +129,7 @@ export default function PerfilScreen({ navigation }: Props) {
                   <View>
                     <Text className="text-gray-800 font-bold text-base">Ingreso Biométrico</Text>
                     <Text className="text-gray-400 text-xs mt-1">
-                      Usar huella o rostro para iniciar sesión rápidamente sin contraseña.
+                      Usar huella o rostro para iniciar sesión rápidamente.
                     </Text>
                   </View>
                 </View>
@@ -151,7 +151,7 @@ export default function PerfilScreen({ navigation }: Props) {
             
             <TouchableOpacity 
               className="flex-row items-center py-3 border-b border-gray-100"
-              onPress={() => Alert.alert("Descarga", "Generando PDF de Hoja de Vida...")}
+              onPress={downloadHojaVida} // <--- CONECTADO
             >
               <Feather name="file-text" size={20} color="#b91c1c" />
               <Text className="text-gray-700 font-medium ml-3 flex-1">Descargar Hoja de Vida</Text>
@@ -160,7 +160,7 @@ export default function PerfilScreen({ navigation }: Props) {
 
             <TouchableOpacity 
               className="flex-row items-center py-3 pt-4"
-              onPress={() => Alert.alert("Descarga", "Generando Ficha Médica...")}
+              onPress={downloadFichaMedica} // <--- CONECTADO
             >
               <Feather name="activity" size={20} color="#b91c1c" />
               <Text className="text-gray-700 font-medium ml-3 flex-1">Descargar Ficha Médica</Text>

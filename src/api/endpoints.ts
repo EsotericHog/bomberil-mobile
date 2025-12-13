@@ -77,6 +77,11 @@ export const ENDPOINTS = {
     HOJA_VIDA: 'voluntarios/hoja-vida/',
     FICHA_MEDICA: 'voluntarios/ficha-medica/',
   },
+  PERFIL: {
+    // ... otros endpoints de perfil si hay
+    DESCARGAR_HOJA_VIDA: 'perfil/descargar-hoja-vida/',
+    DESCARGAR_FICHA_MEDICA: 'perfil/descargar-ficha-medica/',
+  },
   CORE: {
     ESTACIONES: 'core/estaciones/',
   }

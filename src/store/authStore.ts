@@ -3,6 +3,8 @@ import { tokenStorage } from '@/utils/storage';
 import client from '@/api/client';
 import { ENDPOINTS } from '@/api/endpoints';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { Linking, Alert } from 'react-native'; // <--- Usamos Linking nativo
+import { API_URL } from '@/api/client'; // Asegúrate de importar tu URL base
 
 // 1. Definimos la estructura del JWT (Payload)
 interface UsuarioData {
@@ -34,10 +36,13 @@ interface AuthState {
   token: string | null;
   refreshToken: string | null;
   user: UsuarioData | null;
-  estacion: EstacionData | null; // Guardamos la estación activa
+  estacion: EstacionData | null;
   isAuthenticated: boolean;
   userPermissions: string[];
   isLoading: boolean;
+  
+  // Estado para UI de carga (opcional, para deshabilitar botón mientras abre navegador)
+  isDownloading: boolean;
 
   // Estados biométricos
   isBiometricSupported: boolean;
@@ -51,15 +56,16 @@ interface AuthState {
   hasPermission: (perm: string) => boolean;
   restoreSession: () => Promise<void>;
 
-  //Acciones biométricas
   checkBiometrics: () => Promise<void>;
   toggleBiometrics: (enabled: boolean) => Promise<boolean>;
   promptBiometrics: () => Promise<boolean>;
   unlockApp: () => Promise<void>;
   lockApp: () => void;
+
+  // Acciones de Descarga (Simples)
+  downloadHojaVida: () => void;
+  downloadFichaMedica: () => void;
 }
-
-
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
@@ -69,17 +75,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   userPermissions: [],
   isLoading: true,
+  isDownloading: false,
+
   isBiometricSupported: false,
   isBiometricEnabled: false,
   isAppLocked: false,
 
   // --- ACCIÓN: INICIAR SESIÓN ---
   signIn: async (data: LoginResponse) => {
-    // 1. Guardamos el token en disco (SecureStore)
     await tokenStorage.setToken(data.access);
-    if (data.refresh) {
-      await tokenStorage.setRefreshToken(data.refresh);
-    }
+    if (data.refresh) await tokenStorage.setRefreshToken(data.refresh);
 
     // 2. Guardamos toda la data en memoria (Zustand)
     set({
@@ -105,66 +110,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       // 1. Obtener el refresh token actual del estado
       const refreshToken = get().refreshToken;
-
-      if (refreshToken) {
-        // 2. Avisar al backend para blacklisting (Fire and forget)
-        // Usamos client.post. Si falla (ej. sin internet), no importa,
-        // procedemos a borrar localmente igual para que el usuario pueda salir.
-        await client.post(ENDPOINTS.AUTH.LOGOUT, {
-            refresh: refreshToken
-        });
-      }
-    } catch (error) {
-      console.log("Error notificando logout al servidor (posiblemente offline)", error);
+      if (refreshToken) await client.post(ENDPOINTS.AUTH.LOGOUT, { refresh: refreshToken });
+    } catch (e) {
+      console.log("Error logout:", e);
     } finally {
-      // 3. SIEMPRE borrar datos locales y limpiar estado
       await tokenStorage.removeToken();
       await tokenStorage.removeRefreshToken();
-      // Si implementaste setRefreshToken en storage, bórralo aquí también
-
       set({ 
-        token: null, 
-        refreshToken: null, 
-        user: null, 
-        estacion: null, 
-        isAuthenticated: false, 
-        userPermissions: [],
-        isAppLocked: false
+        token: null, refreshToken: null, user: null, estacion: null, 
+        isAuthenticated: false, userPermissions: [], isAppLocked: false 
       });
     }
   },
 
-  // --- HELPER: VERIFICAR PERMISOS ---
-  hasPermission: (perm: string) => {
-    return get().userPermissions.includes(perm);
-  },
+  hasPermission: (perm: string) => get().userPermissions.includes(perm),
 
-  // --- ACCIÓN: RESTAURAR SESIÓN (Al abrir la App) ---
+  // --- RESTORE SESSION ---
   restoreSession: async () => {
     try {
-      // 1. Solo verificamos si existen los tokens en disco
       const token = await tokenStorage.getToken();
       const refreshToken = await tokenStorage.getRefreshToken();
       const isBioEnabled = await tokenStorage.getBiometricPreference();
       
-      if (!token || !refreshToken) { // Si falta alguno, no podemos restaurar
+      if (!token || !refreshToken) {
         set({ isAuthenticated: false, isLoading: false });
         return;
       }
 
-      // 2. Llamamos DIRECTAMENTE a Auth Me.
-      // El interceptor de request nuevo (client.ts) se encargará de leer el token del disco
-      // si el estado está vacío.
       const response = await client.get(ENDPOINTS.AUTH.ME);
-      const data = response.data; // { usuario, estacion, permisos, membresia_id }
-
-      // 3. DECISIÓN DE BLOQUEO
-      // Si la biometría está activada, la app inicia BLOQUEADA
+      const data = response.data;
       const shouldLock = isBioEnabled;
 
-      // 3. Si todo salió bien, actualizamos el estado
       set({ 
-        token, // Token del disco (o el renovado si el interceptor actuó)
+        token, 
         refreshToken, 
         user: data.usuario,
         estacion: data.estacion,
@@ -176,110 +154,80 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       
     } catch (error) {
-      console.log('Error restaurando sesión (Token inválido o sin internet):', error);
-      
-      // Si falla auth/me (ej. 401 definitivo, usuario borrado, membresía revocada), 
-      // limpiamos todo y mandamos al Login.
+      console.log('Error session:', error);
       await get().signOut();
       set({ isLoading: false });
     }
   },
 
-
-  // --- LÓGICA BIOMÉTRICA ---
-  // 1. Verificar si el celular tiene hardware y si el usuario lo activó antes
+  // --- BIOMETRÍA ---
   checkBiometrics: async () => {
     const compatible = await LocalAuthentication.hasHardwareAsync();
     const enrolled = await LocalAuthentication.isEnrolledAsync();
-    const isSupported = compatible && enrolled;
-    // Recuperar preferencia guardada
     const isEnabled = await tokenStorage.getBiometricPreference();
-
-    set({ isBiometricSupported: isSupported, isBiometricEnabled: isSupported && isEnabled });
+    set({ isBiometricSupported: compatible && enrolled, isBiometricEnabled: compatible && enrolled && isEnabled });
   },
 
-  // 2. Activar/Desactivar la opción (Para el perfil)
   toggleBiometrics: async (enable: boolean) => {
     if (enable) {
-      // Confirmar identidad antes de activar
       const success = await get().promptBiometrics();
       if (!success) return false;
     }
-    
-    // Solo guardamos la preferencia, nada de tokens
     await tokenStorage.setBiometricPreference(enable);
     set({ isBiometricEnabled: enable });
     return true;
   },
 
-  // 3. Solicitar la huella (El Popup nativo)
   promptBiometrics: async () => {
     try {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: 'Confirma tu identidad',
         cancelLabel: 'Cancelar',
-        disableDeviceFallback: false, // Permite usar PIN si falla la huella
+        disableDeviceFallback: false,
       });
       return result.success;
-    } catch (error) {
-      console.log('Error biométrico:', error);
-      return false;
-    }
+    } catch { return false; }
   },
 
-  // --- APP LOCKER ---
   unlockApp: async () => {
-    // Pedir huella
     const result = await LocalAuthentication.authenticateAsync({
         promptMessage: 'Desbloquear Bomberil System',
         disableDeviceFallback: false,
     });
-
-    if (result.success) {
-        set({ isAppLocked: false }); // <--- ¡ABRE LA APP!
-    }
+    if (result.success) set({ isAppLocked: false });
   },
 
-  lockApp: () => {
-    set({ isAppLocked: true });
+  lockApp: () => set({ isAppLocked: true }),
+
+  // --- DESCARGAS SIMPLES (Navegador) ---
+  // SOLUCIÓN AL ERROR: Eliminamos expo-file-system y usamos Linking
+  
+  downloadHojaVida: () => {
+    const token = get().token;
+    if (!token) {
+        Alert.alert("Error", "No hay sesión activa");
+        return;
+    }
+    // Concatenamos URL base + Endpoint + Token
+    const url = `${API_URL}${ENDPOINTS.PERFIL.DESCARGAR_HOJA_VIDA}?token=${token}`;
+    
+    Linking.openURL(url).catch(err => {
+        console.error("Error abriendo navegador:", err);
+        Alert.alert("Error", "No se pudo abrir el navegador para descargar.");
+    });
+  },
+
+  downloadFichaMedica: () => {
+    const token = get().token;
+    if (!token) {
+        Alert.alert("Error", "No hay sesión activa");
+        return;
+    }
+    const url = `${API_URL}${ENDPOINTS.PERFIL.DESCARGAR_FICHA_MEDICA}?token=${token}`;
+    
+    Linking.openURL(url).catch(err => {
+        console.error("Error abriendo navegador:", err);
+        Alert.alert("Error", "No se pudo abrir el navegador para descargar.");
+    });
   },
 }));
-
-//      // Decodificación simple para restauración optimista
-//      // (Aquí podrías agregar lógica para verificar si el token expiró y llamar al refresh automáticamente)
-//      const decoded = jwtDecode<TokenPayload>(token);
-//      const isExpired = decoded.exp ? (Date.now() / 1000) > decoded.exp : true;
-//
-//      if (isExpired) {
-//        await get().signOut();
-//        set({ isLoading: false });
-//        return;
-//      }
-//
-//      // RESTAURACIÓN OPTIMISTA:
-//      // Como el token tiene tus claims personalizados (rut, nombre), 
-//      // podemos restaurar una sesión básica sin llamar a la API inmediatamente.
-//      // NOTA: Para recuperar 'permisos' y 'avatar' real, deberías llamar a un endpoint 
-//      // tipo '/auth/me/' aquí, pero por ahora usaremos los datos del token.
-//      
-//      const userRestored = {
-//        id: decoded.user_id,
-//        rut: decoded.rut || '',
-//        nombre_completo: decoded.nombre || '',
-//        email: '',
-//        avatar: null
-//      };
-//
-//      set({ 
-//        token, 
-//        user: userRestored, 
-//        isAuthenticated: true, 
-//        isLoading: false 
-//      });
-//
-//    } catch (e) {
-//      console.error('Error restaurando sesión:', e);
-//      set({ token: null, isAuthenticated: false, isLoading: false });
-//    }
-//  },
-//}));

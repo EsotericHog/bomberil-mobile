@@ -7,7 +7,7 @@ import { ENDPOINTS } from './endpoints';
 // 1. Emulador Android: Usa 'http://10.0.2.2:8000/api/' (apunta al localhost de tu PC).
 // 2. Dispositivo Físico (USB/WiFi): Usa tu IP local, ej: 'http://192.168.1.15:8000/api/'.
 // 3. Emulador iOS: Usa 'http://localhost:8000/api/'.
-const API_URL = 'http://10.0.2.2:8000/api/v1/'; 
+export const API_URL = 'http://10.0.2.2:8000/api/v1/'; 
 
 const client = axios.create({
   baseURL: API_URL,
