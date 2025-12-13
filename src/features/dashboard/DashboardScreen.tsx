@@ -27,6 +27,7 @@ export default function DashboardScreen({ navigation }: Props) {
   console.log(puedeVerInventario)
   const puedeVerDocumentacion = hasPermission('acceso_gestion_documental');
   console.log(puedeVerDocumentacion)
+  const puedeVerMantenimiento = hasPermission('acceso_gestion_mantenimiento');
 
   // 3. Función de Logout con confirmación para evitar toques accidentales
   const handleSignOut = () => {
@@ -130,7 +131,17 @@ export default function DashboardScreen({ navigation }: Props) {
             onPress={() => navigation.navigate('InventarioHome')}
           />
 
-          {/* 3. Módulo DOCUMENTACIÓN (Placeholder) */}
+          {/* 3. MANTENIMIENTO (NUEVO) */}
+          <MenuCard 
+            title="Mantenimiento" 
+            subtitle={puedeVerMantenimiento ? "Órdenes de trabajo y tareas" : "No tienes permisos de acceso"}
+            icon="tool"
+            color="bg-purple-600"
+            disabled={!puedeVerMantenimiento}
+            onPress={() => navigation.navigate('MantenimientoList')}
+          />
+
+          {/* 4. Módulo DOCUMENTACIÓN (Placeholder) */}
           <MenuCard 
             title="Biblioteca Digital" 
             subtitle={puedeVerDocumentacion ? "Manuales y protocolos operativos" : "No tienes permisos de acceso"}

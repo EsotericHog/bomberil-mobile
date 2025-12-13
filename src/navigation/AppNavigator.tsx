@@ -15,6 +15,7 @@ import PrestamosHomeScreen from '@/features/inventario/prestamos/PrestamosHomeSc
 import CrearPrestamoScreen from '@/features/inventario/prestamos/CrearPrestamoScreen';
 import DetallePrestamoScreen from '@/features/inventario/prestamos/DetallePrestamoScreen';
 import MantenimientoListScreen from '@/features/mantenimiento/MantenimientoListScreen';
+import CrearOrdenScreen from '@/features/mantenimiento/CrearOrdenScreen';
 import PerfilScreen from '@/features/perfil/PerfilScreen';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
@@ -83,6 +84,11 @@ export const AppNavigator = () => {
         name="MantenimientoList" 
         component={MantenimientoListScreen} 
         options={{ title: 'Órdenes de Trabajo' }} 
+      />
+      <Stack.Screen 
+        name="CrearOrden" 
+        component={CrearOrdenScreen} 
+        options={{ title: 'Nueva Orden Correctiva', presentation: 'modal' }} 
       />
       <Stack.Screen 
         name="MiPerfil" 

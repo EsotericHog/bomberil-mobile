@@ -98,8 +98,7 @@ export default function MantenimientoListScreen({ navigation }: Props) {
           
           {/* Botón Nueva Correctiva */}
           <TouchableOpacity 
-            onPress={() => Alert.alert("Próximamente", "Creación de órdenes en Fase 3.")}
-            // onPress={() => navigation.navigate('CrearOrden')}
+            onPress={() => navigation.navigate('CrearOrden')}
             className="bg-gray-900 px-3 py-2 rounded-lg flex-row items-center shadow-sm"
           >
             <Feather name="plus" size={16} color="white" />
