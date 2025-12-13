@@ -14,6 +14,7 @@ import RecepcionStockScreen from '@/features/inventario/RecepcionStockScreen';
 import PrestamosHomeScreen from '@/features/inventario/prestamos/PrestamosHomeScreen';
 import CrearPrestamoScreen from '@/features/inventario/prestamos/CrearPrestamoScreen';
 import DetallePrestamoScreen from '@/features/inventario/prestamos/DetallePrestamoScreen';
+import MantenimientoListScreen from '@/features/mantenimiento/MantenimientoListScreen';
 import PerfilScreen from '@/features/perfil/PerfilScreen';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
@@ -77,6 +78,11 @@ export const AppNavigator = () => {
         name="DetallePrestamo" 
         component={DetallePrestamoScreen} 
         options={{ headerShown: false }} // El componente ya tiene su propio header custom
+      />
+      <Stack.Screen 
+        name="MantenimientoList" 
+        component={MantenimientoListScreen} 
+        options={{ title: 'Órdenes de Trabajo' }} 
       />
       <Stack.Screen 
         name="MiPerfil" 
