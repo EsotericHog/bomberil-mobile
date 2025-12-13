@@ -40,8 +40,7 @@ export default function MantenimientoListScreen({ navigation }: Props) {
   const renderItem = ({ item }: { item: OrdenResumen }) => (
     <TouchableOpacity 
       className="bg-white p-4 mb-3 rounded-2xl border border-gray-100 shadow-sm"
-      onPress={() => Alert.alert("Próximamente", "El detalle se implementará en la Fase 4.")}
-      // onPress={() => navigation.navigate('DetalleOrden', { id: item.id })}
+      onPress={() => navigation.navigate('DetalleOrden', { id: item.id })} // <--- CONEXIÓN REAL
     >
       <View className="flex-row justify-between items-start mb-2">
         <View className="flex-1 pr-2">
