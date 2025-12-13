@@ -170,7 +170,7 @@ export default function DashboardScreen({ navigation }: Props) {
             subtitle="Leer QR sin contexto específico"
             icon="maximize"
             color="bg-gray-800"
-            onPress={() => Alert.alert("Escáner", "Abriendo cámara para lectura general...")}
+            onPress={() => navigation.navigate('QuickScanner')}
           />
 
         </ScrollView>

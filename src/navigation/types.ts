@@ -37,6 +37,7 @@ export type AppStackParamList = {
   DocumentalList: undefined;
   
   MiPerfil: undefined;
+  QuickScanner: undefined;
 };
 
 // Helper para usar en los componentes

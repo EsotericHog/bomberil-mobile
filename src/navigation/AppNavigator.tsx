@@ -23,6 +23,7 @@ import HojaVidaScreen from '@/features/usuarios/HojaVidaScreen';
 import FichaMedicaScreen from '@/features/usuarios/FichaMedicaScreen';
 import DocumentalListScreen from '@/features/documental/DocumentalListScreen';
 import PerfilScreen from '@/features/perfil/PerfilScreen';
+import QuickScannerScreen from '@/features/scanner/QuickScannerScreen';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
@@ -125,6 +126,11 @@ export const AppNavigator = () => {
         name="DocumentalList" 
         component={DocumentalListScreen} 
         options={{ title: 'Biblioteca Digital' }} 
+      />
+      <Stack.Screen 
+        name="QuickScanner" 
+        component={QuickScannerScreen} 
+        options={{ title: 'Escáner Rápido', presentation: 'modal' }} 
       />
       <Stack.Screen 
         name="MiPerfil" 
