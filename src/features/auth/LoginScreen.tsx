@@ -123,7 +123,7 @@ export default function LoginScreen({ navigation }: Props) {
             <View className="items-center mb-10">
               <View className="bg-white p-2 rounded-full shadow-lg mb-4">
                 <Image 
-                  source={require('../../../assets/bomberil_logo.png')}
+                  source={require('../../../assets/icon.png')}
                   className="w-24 h-24 rounded-full" 
                   resizeMode="contain"
                 />
