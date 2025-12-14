@@ -21,6 +21,7 @@ import { ItemPrestable, ItemPrestamoPayload } from '@/features/inventario/types'
 import { useAuthStore } from '@/store/authStore';
 import { useFocusEffect } from '@react-navigation/native';
 import { useInventoryStore } from '@/store/inventoryStore';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'CrearPrestamo'>;
 
@@ -45,6 +46,10 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
   const [nuevoDestContacto, setNuevoDestContacto] = useState('');
   const [showDestModal, setShowDestModal] = useState(false);
 
+  // Estado para la fecha de devolución
+  const [fechaDevolucion, setFechaDevolucion] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
   // Estado General
   const [notas, setNotas] = useState('');
   // Estado Carrito
@@ -61,7 +66,7 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
 
 
-  // 1. ESCUCHA DE RETORNO DEL ESCÁNER (Corrección de Estado)
+  // ESCUCHA DE RETORNO DEL ESCÁNER (Corrección de Estado)
   // Usamos useFocusEffect para revisar el buzón cada vez que la pantalla vuelve a tener foco
   useFocusEffect(
     useCallback(() => {
@@ -190,6 +195,14 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
     setCarrito(prev => prev.filter(item => item.id !== id));
   };
 
+  // 3. FUNCIÓN PARA MANEJAR EL CAMBIO DE FECHA
+  const onChangeDate = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios'); // En Android se cierra automático
+    if (selectedDate) {
+      setFechaDevolucion(selectedDate);
+    }
+  };
+
   const handleSubmit = async () => {
     // Validaciones
     if (!destinatarioId && !nuevoDestNombre.trim()) {
@@ -197,6 +210,10 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
     }
     if (carrito.length === 0) {
       return Alert.alert("Carrito vacío", "Agrega al menos un ítem para prestar.");
+    }
+    // Validar fecha devolución
+    if (!fechaDevolucion) {
+      return Alert.alert("Falta Fecha", "La fecha de devolución esperada es obligatoria.");
     }
     // Validar cantidades > 0 antes de enviar
     const invalidItems = carrito.filter(c => c.cantidad_seleccionada <= 0);
@@ -209,10 +226,13 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
       cantidad_prestada: c.cantidad_seleccionada
     }));
 
+    const fechaFormateada = fechaDevolucion.toISOString().split('T')[0];
+
     const success = await crearPrestamo({
       destinatario_id: destinatarioId || undefined,
       nuevo_destinatario_nombre: !destinatarioId ? nuevoDestNombre : undefined,
       nuevo_destinatario_contacto: !destinatarioId ? nuevoDestContacto : undefined,
+      fecha_devolucion_esperada: fechaFormateada,
       notas,
       items: itemsPayload
     });
@@ -371,6 +391,36 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
            <View className="border-2 border-dashed border-gray-200 rounded-xl p-8 items-center mb-4"><Text className="text-gray-400">Lista vacía</Text></View>
         )}
 
+        {/* Fecha de devolución */}
+        <View className="bg-white p-4 rounded-xl shadow-sm mt-2 mb-2">
+            <Text className="text-xs font-bold text-gray-400 uppercase mb-2">
+              Fecha Devolución Esperada *
+            </Text>
+            
+            <TouchableOpacity 
+              onPress={() => setShowDatePicker(true)}
+              className={`flex-row items-center border rounded-lg px-3 py-3 ${!fechaDevolucion ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'}`}
+            >
+              <Feather name="calendar" size={20} color={!fechaDevolucion ? "#ef4444" : "#4b5563"} />
+              <Text className={`ml-3 text-base ${!fechaDevolucion ? 'text-red-500 font-bold' : 'text-gray-800'}`}>
+                {fechaDevolucion 
+                  ? fechaDevolucion.toLocaleDateString() 
+                  : "Seleccionar fecha (Obligatorio)"}
+              </Text>
+            </TouchableOpacity>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={fechaDevolucion || new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={onChangeDate}
+                minimumDate={new Date()} // No permitir fechas pasadas
+              />
+            )}
+        </View>
+
+        {/* Notas */}
         <View className="bg-white p-4 rounded-xl shadow-sm mt-2 mb-20">
             <TextInput className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 h-20" placeholder="Notas..." multiline textAlignVertical="top" value={notas} onChangeText={setNotas} />
         </View>
