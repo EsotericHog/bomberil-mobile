@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { CameraView, Camera } from "expo-camera";
+import { CameraView, Camera } from "expo-camera"; 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '@/navigation/types';
+import client from '@/api/client';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'QuickScanner'>;
 
 export default function QuickScannerScreen({ navigation }: Props) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
     const getPermissions = async () => {
@@ -20,49 +22,119 @@ export default function QuickScannerScreen({ navigation }: Props) {
     getPermissions();
   }, []);
 
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
-    if (scanned) return;
+  const handleBarCodeScanned = async ({ type, data }: { type: string; data: string }) => {
+    // Prevención de lecturas múltiples
+    if (scanned || processing) return;
+    
     setScanned(true);
+    setProcessing(true);
 
-    // 1. DETECCIÓN: ¿Es un Usuario (Ficha Médica)?
-    // Patrón: UUID v4 (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    console.log(`[QuickScanner] Detectado: ${data} (Tipo: ${type})`);
 
-    if (uuidRegex.test(data)) {
-      // Es un usuario -> Ir a Ficha Médica
-      // 'replace' para que al volver no regrese a la cámara abierta
-      navigation.replace('FichaMedica', { id: data });
-      return;
+    try {
+      // 1. ANÁLISIS DE PATRÓN
+
+      // CASO A: ¿Es un UUID de Usuario? (Para Ficha Médica)
+      // Regex UUID v4 (Case insensitive)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      if (uuidRegex.test(data)) {
+        console.log("[QuickScanner] Detectado UUID -> Redirigiendo a Ficha Médica");
+        navigation.replace('FichaMedica', { id: data });
+        return;
+      }
+
+      // CASO B: ¿Es un Código de Activo?
+      // Aceptamos cualquier string que no sea UUID y tenga longitud razonable
+      if (data.length > 2) {
+        console.log("[QuickScanner] Posible Activo -> Consultando Inventario...");
+        await processAsset(data);
+        return;
+      }
+
+      // CASO C: No reconocido
+      throw new Error("Formato no válido");
+
+    } catch (error) {
+      console.log("[QuickScanner] Error procesamiento:", error);
+      Alert.alert(
+        "Código no reconocido", 
+        `El formato "${data}" no coincide con activos ni usuarios.`,
+        [{ text: "Escanear de nuevo", onPress: () => resetScanner() }]
+      );
     }
+  };
 
-    // 2. DETECCIÓN: ¿Es un Activo?
-    // Asumimos que es activo si NO es UUID.
-    // Tu pantalla DetalleExistencia espera un 'sku' (o código).
-    // Si tu código es algo como "E01-ACT-001" o simplemente un ID numérico, lo pasamos directo.
-    if (data.length > 0) {
-       navigation.replace('DetalleExistencia', { sku: data });
-       return;
+  const processAsset = async (code: string) => {
+    try {
+      // Endpoint de búsqueda de inventario
+      const response = await client.get(`gestion_inventario/existencias/buscar/?codigo=${code}`);
+      const data = response.data;
+
+      // La API puede devolver una lista (búsqueda parcial) o un objeto (búsqueda exacta)
+      // Adaptamos la lógica para ser robustos
+      let activoId = null;
+
+      if (Array.isArray(data)) {
+        if (data.length > 0) activoId = data[0].sku; // O .id según tu modelo
+      } else if (data && data.sku) {
+        activoId = data.sku; // O .id
+      }
+
+      // IMPORTANTE: Tu pantalla DetalleExistencia espera 'sku' como string
+      // Si tu backend devuelve el objeto completo, extraemos el identificador correcto.
+      // Si 'data' ya es el objeto de la existencia, úsalo.
+      
+      if (data) {
+         // Si la búsqueda fue exitosa, asumimos que el código escaneado ES el SKU o código
+         // Navegamos directo pasando el código escaneado
+         navigation.replace('DetalleExistencia', { sku: code }); 
+      } else {
+         throw new Error("No encontrado");
+      }
+
+    } catch (error) {
+      console.log("[QuickScanner] API Error:", error);
+      Alert.alert(
+        "No encontrado", 
+        `No existe ningún activo con el código: ${code}`, 
+        [{ text: "OK", onPress: () => resetScanner() }]
+      );
     }
+  };
 
-    // 3. Fallback
-    Alert.alert("Error", "Código no reconocido", [
-      { text: "OK", onPress: () => setScanned(false) }
-    ]);
+  const resetScanner = () => {
+    setScanned(false);
+    setProcessing(false);
   };
 
   if (hasPermission === null) return <View className="flex-1 bg-black" />;
-  if (hasPermission === false) return <Text className="text-white text-center mt-10">Sin acceso a la cámara</Text>;
+  if (hasPermission === false) return <Text className="text-white mt-10 text-center">Sin acceso a cámara</Text>;
 
   return (
     <View className="flex-1 bg-black">
       <CameraView
         onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+        // --- AQUÍ ESTABA EL ERROR: FALTABA ESTA CONFIGURACIÓN ---
+        barcodeScannerSettings={{
+          barcodeTypes: [
+            "qr", 
+            "ean13", 
+            "ean8", 
+            "code128", 
+            "code39", 
+            "upc_e", 
+            "aztec", 
+            "pdf417",
+            "datamatrix"
+          ],
+        }}
         style={StyleSheet.absoluteFillObject}
         facing="back"
       />
       
       <SafeAreaView className="flex-1 justify-between p-4">
-        {/* Header */}
+        {/* Header Overlay */}
         <View className="flex-row justify-between items-center">
           <TouchableOpacity 
             onPress={() => navigation.goBack()} 
@@ -76,22 +148,28 @@ export default function QuickScannerScreen({ navigation }: Props) {
           <View style={{ width: 48 }} />
         </View>
 
-        {/* Marco de enfoque visual */}
+        {/* Guía Visual */}
         <View className="flex-1 justify-center items-center">
-          <View className="w-64 h-64 border-2 border-white/50 rounded-3xl relative">
-            {/* Esquinas decorativas */}
+          <View className="w-64 h-64 border-2 border-white/50 rounded-3xl justify-center items-center relative">
+            {/* Esquinas */}
             <View className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-purple-500 rounded-tl-3xl" />
             <View className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-purple-500 rounded-tr-3xl" />
             <View className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-purple-500 rounded-bl-3xl" />
             <View className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-purple-500 rounded-br-3xl" />
+            
+            {processing && <ActivityIndicator size="large" color="#a855f7" />}
           </View>
-          <Text className="text-white/80 mt-4 font-medium bg-black/30 px-3 py-1 rounded">
-            Escanea un Activo o una Credencial
+          <Text className="text-white/80 mt-4 text-center font-medium bg-black/30 px-4 py-1 rounded-full">
+            {processing ? "Procesando..." : "Apunta a un Activo o Credencial"}
           </Text>
         </View>
 
-        {/* Espaciador inferior */}
-        <View className="h-10" />
+        {/* Footer */}
+        <View className="items-center mb-8">
+            <Text className="text-gray-400 text-xs text-center px-10">
+                El sistema detectará automáticamente si es un equipo o un voluntario.
+            </Text>
+        </View>
       </SafeAreaView>
     </View>
   );

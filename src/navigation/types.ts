@@ -8,7 +8,7 @@ export type AuthStackParamList = {
 
 // Rutas para cuando está logueado
 export type AppStackParamList = {
-  Dashboard: undefined; // "Portal" 
+  Dashboard: { scannedCode?: string } | undefined; // "Portal" 
   SeleccionEstacion: undefined; // Necesario porque el usuario accede vía Membresía
   InventarioHome: undefined; // Módulo Inventario
   ScannerInventario: { returnScreen?: keyof AppStackParamList } | undefined;

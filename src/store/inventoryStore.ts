@@ -28,7 +28,7 @@ interface InventoryState {
   compartimentos: Compartimento[]; // Esta lista cambiará según la ubicación seleccionada
 
   // Acciones
-  fetchExistenciaByQR: (codigo: string) => Promise<boolean>;
+  fetchExistenciaByQR: (codigo: string, suppressError?: boolean) => Promise<boolean>;
   fetchCatalogo: (search?: string) => Promise<void>;
   fetchExistenciasPorProducto: (productoId: number) => Promise<void>;
   recepcionarStock: (payload: RecepcionPayload) => Promise<boolean>;
@@ -57,7 +57,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
   ubicaciones: [],
   compartimentos: [],
 
-  fetchExistenciaByQR: async (codigo) => {
+  fetchExistenciaByQR: async (codigo: string, suppressError = false) => {
     set({ isLoading: true, error: null });
     try {
       const response = await client.get(ENDPOINTS.INVENTARIO.EXISTENCIA_BUSCAR(codigo));
@@ -82,7 +82,9 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       const msg = error.response?.data?.detail || error.message || "Error al buscar existencia";
       
       set({ error: msg, isLoading: false, currentExistencia: null });
-      Alert.alert("Error", msg);
+      if (!suppressError) {
+        Alert.alert("Error", msg);
+      }
       return false;
     }
   },

@@ -1,7 +1,9 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StatusBar, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
+import { useInventoryStore } from '@/store/inventoryStore';
+import { useUsersStore } from '@/store/usersStore';
 import { Feather } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '@/navigation/types';
@@ -18,16 +20,59 @@ interface MenuCardProps {
   disabled?: boolean;
 }
 
-export default function DashboardScreen({ navigation }: Props) {
+export default function DashboardScreen({ navigation, route }: Props) {
   // 1. Consumimos los datos frescos del Store (Sincronizados con backend)
   const { user, estacion, signOut, hasPermission } = useAuthStore();
 
+  // Stores para la lógica de escáner
+  const { fetchExistenciaByQR } = useInventoryStore();
+  const { fetchFichaMedica } = useUsersStore();
+  const [isProcessing, setIsProcessing] = useState(false);
+
   // 2. Verificamos el permiso de negocio real
   const puedeVerInventario = hasPermission('acceso_gestion_inventario');
-  console.log(puedeVerInventario)
   const puedeVerDocumentacion = hasPermission('acceso_gestion_documental');
-  console.log(puedeVerDocumentacion)
   const puedeVerMantenimiento = hasPermission('acceso_gestion_mantenimiento');
+  const puedeVerUsuarios = hasPermission('acceso_gestion_usuarios');
+
+  // --- ESCUCHAR RETORNO DEL ESCÁNER ---
+  useEffect(() => {
+    if (route.params?.scannedCode) {
+      const code = route.params.scannedCode;
+      navigation.setParams({ scannedCode: undefined }); // Limpiar para no repetir
+      handleSmartScan(code);
+    }
+  }, [route.params?.scannedCode]);
+
+  const handleSmartScan = async (code: string) => {
+    setIsProcessing(true);
+    try {
+      // 1. Intento A: ¿Es un Activo/Inventario? (Modo silencioso)
+      const isExistencia = await fetchExistenciaByQR(code, true);
+      if (isExistencia) {
+        navigation.navigate('DetalleExistencia', { sku: code });
+        return;
+      }
+
+      // 2. Intento B: ¿Es una Ficha Médica (Usuario)? (Modo silencioso)
+      const isFicha = await fetchFichaMedica(code, true);
+      if (isFicha) {
+        navigation.navigate('FichaMedica', { id: code });
+        return;
+      }
+
+      // 3. Si nada coincide
+      Alert.alert(
+        "Código Desconocido", 
+        `El código "${code}" no corresponde a un activo ni a una ficha médica registrada.`
+      );
+
+    } catch (e) {
+      Alert.alert("Error", "Ocurrió un problema al procesar el código.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   // 3. Función de Logout con confirmación para evitar toques accidentales
   const handleSignOut = () => {
@@ -69,6 +114,17 @@ export default function DashboardScreen({ navigation }: Props) {
 
   return (
     <View className="flex-1 bg-gray-50">
+      {/* OVERLAY DE CARGA (Si está procesando el QR) */}
+      {isProcessing && (
+        <View className="absolute inset-0 bg-black/50 z-50 justify-center items-center">
+          <View className="bg-white p-6 rounded-2xl items-center">
+            <ActivityIndicator size="large" color="#b91c1c" />
+            <Text className="mt-4 font-bold text-gray-800">Analizando código...</Text>
+          </View>
+        </View>
+      )}
+
+
       <StatusBar barStyle="dark-content" backgroundColor="#f9fafb" />
       <SafeAreaView className="flex-1">
         
@@ -170,7 +226,7 @@ export default function DashboardScreen({ navigation }: Props) {
             subtitle="Leer QR sin contexto específico"
             icon="maximize"
             color="bg-gray-800"
-            onPress={() => navigation.navigate('QuickScanner')}
+            onPress={() => navigation.navigate('ScannerInventario', { returnScreen: 'Dashboard' })}
           />
 
         </ScrollView>

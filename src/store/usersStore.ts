@@ -19,7 +19,7 @@ interface UsersState {
   
   fetchUsuarioDetalle: (id: string) => Promise<void>;
   fetchHojaVida: (id: string) => Promise<void>;
-  fetchFichaMedica: (id: string) => Promise<boolean>; // Bool para saber si navegar o no
+  fetchFichaMedica: (id: string, suppressError?: boolean) => Promise<boolean>;
   
   clearSelection: () => void;
 }
@@ -62,7 +62,7 @@ export const useUsersStore = create<UsersState>((set) => ({
     }
   },
 
-  fetchFichaMedica: async (id) => {
+  fetchFichaMedica: async (id: string, suppressError = false) => {
     set({ isLoading: true, error: null, selectedFichaMedica: null });
     try {
       const response = await client.get(ENDPOINTS.USUARIOS.FICHA_MEDICA(id));
@@ -74,7 +74,9 @@ export const useUsersStore = create<UsersState>((set) => ({
         ? "No tienes permisos para ver esta ficha médica." 
         : "No se pudo cargar la ficha médica.";
       
-      Alert.alert("Acceso Denegado", msg);
+      if (!suppressError) {
+        Alert.alert("Acceso Denegado", msg);
+      }
       set({ isLoading: false });
       return false;
     }
