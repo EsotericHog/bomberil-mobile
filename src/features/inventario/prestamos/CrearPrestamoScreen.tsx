@@ -1,5 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Modal, FlatList, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  ScrollView, 
+  Modal, 
+  FlatList, 
+  ActivityIndicator, 
+  Alert, 
+  KeyboardAvoidingView, 
+  Platform 
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useLoansStore } from '@/store/loansStore';
@@ -7,6 +19,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '@/navigation/types';
 import { ItemPrestable, ItemPrestamoPayload } from '@/features/inventario/types';
 import { useAuthStore } from '@/store/authStore';
+import { useFocusEffect } from '@react-navigation/native';
+import { useInventoryStore } from '@/store/inventoryStore';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'CrearPrestamo'>;
 
@@ -21,6 +35,9 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
     fetchDestinatarios, fetchItemsPrestables, crearPrestamo, clearItemsPrestables,
     fetchItemByCode
   } = useLoansStore();
+
+  // Consumir el buzón del escáner
+  const { scannedCode, setScannedCode } = useInventoryStore();
 
   // Estado Destinatario
   const [destinatarioId, setDestinatarioId] = useState<number | null>(null);
@@ -44,19 +61,17 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
 
 
-
-  // ESCUCHA DE RETORNO DEL ESCÁNER
-  useEffect(() => {
-    if (route.params?.scannedCode) {
-      const code = route.params.scannedCode;
-      
-      // Limpiamos el parámetro para que no se dispare de nuevo accidentalmente
-      navigation.setParams({ scannedCode: undefined });
-      
-      console.log("Código recibido del escáner:", code);
-      processScannedCode(code);
-    }
-  }, [route.params?.scannedCode]);
+  // 1. ESCUCHA DE RETORNO DEL ESCÁNER (Corrección de Estado)
+  // Usamos useFocusEffect para revisar el buzón cada vez que la pantalla vuelve a tener foco
+  useFocusEffect(
+    useCallback(() => {
+      if (scannedCode) {
+        console.log("Procesando código del buzón:", scannedCode);
+        processScannedCode(scannedCode);
+        setScannedCode(null); // Limpiar buzón inmediatamente
+      }
+    }, [scannedCode])
+  );
 
   // FUNCIÓN PROCESADORA (Reutiliza tu lógica de búsqueda)
   const processScannedCode = async (code: string) => {
@@ -89,24 +104,23 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
 
   // Lógica de Agregar al Carrito (Reutilizada y mejorada)
   const handleAddItem = (item: ItemPrestable) => {
-    const existe = carrito.find(c => c.id === item.id);
-    if (existe) {
-      Alert.alert("Ya agregado", `El ítem ${item.codigo} ya está en la lista.`);
-      return;
-    }
-    
-    // Validación stock 0 (Backend no debería devolverlo, pero por seguridad)
-    if (item.cantidad_disponible <= 0) {
-      Alert.alert("Sin Stock", "Este ítem no tiene unidades disponibles para prestar.");
-      return;
-    }
+    setCarrito(prevCarrito => {
+      // 1. Validar duplicados dentro del estado actual
+      const existe = prevCarrito.find(c => c.id === item.id);
+      if (existe) {
+        Alert.alert("Ya agregado", `El ítem ${item.codigo} ya está en la lista.`);
+        return prevCarrito; // No hacemos cambios
+      }
+      
+      // 2. Validar Stock
+      if (item.cantidad_disponible <= 0) {
+        Alert.alert("Sin Stock", "Este ítem no tiene unidades disponibles.");
+        return prevCarrito;
+      }
 
-    const nuevoItem: CarritoItem = {
-      ...item,
-      cantidad_seleccionada: 1
-    };
-    
-    setCarrito([...carrito, nuevoItem]);
+      // 3. Retornar el nuevo estado acumulado
+      return [...prevCarrito, { ...item, cantidad_seleccionada: 1 }];
+    });
     
     // Cerrar modales si están abiertos
     setShowItemModal(false);
@@ -150,11 +164,21 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
 
 
 
-  const updateCantidadLote = (id: string, cantidad: string, max: number) => {
-    const val = parseInt(cantidad);
-    if (isNaN(val)) return;
-    
-    // Validación: No exceder stock disponible
+  const updateCantidadLote = (id: string, text: string, max: number) => {
+    // Caso 1: Usuario borra todo (string vacío) -> Permitir y poner 0
+    if (text === '') {
+      setCarrito(prev => prev.map(item => 
+        item.id === id ? { ...item, cantidad_seleccionada: 0 } : item
+      ));
+      return;
+    }
+
+    // Caso 2: Validar que sea número
+    const val = parseInt(text, 10);
+    if (isNaN(val)) return; // Si escribe letras, ignorar
+
+    // Caso 3: Validar máximo
+    // Permitimos escribir, pero si se pasa, ajustamos al máximo (o podrías dejarlo y validar al enviar)
     const finalVal = val > max ? max : val;
 
     setCarrito(prev => prev.map(item => 
@@ -174,6 +198,9 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
     if (carrito.length === 0) {
       return Alert.alert("Carrito vacío", "Agrega al menos un ítem para prestar.");
     }
+    // Validar cantidades > 0 antes de enviar
+    const invalidItems = carrito.filter(c => c.cantidad_seleccionada <= 0);
+    if (invalidItems.length > 0) return Alert.alert("Error", "Hay ítems con cantidad 0.");
 
     // Construir Payload
     const itemsPayload: ItemPrestamoPayload[] = carrito.map(c => ({
@@ -308,15 +335,8 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
             </TouchableOpacity>
         </View>
         
-        {/* LISTA CARRITO (Igual que antes) */}
-        {carrito.length === 0 ? (
-           <View className="border-2 border-dashed border-gray-200 rounded-xl p-8 items-center mb-4 bg-gray-50/50">
-             <Feather name="shopping-cart" size={32} color="#d1d5db" />
-             <Text className="text-gray-400 text-sm mt-2">Lista vacía</Text>
-           </View>
-        ) : (
-           carrito.map((item) => (
-             /* ... (Renderizado de ítem carrito igual que Commit 24) ... */
+        {/* LISTA CARRITO (Con Input Corregido) */}
+        {carrito.map((item) => (
              <View key={item.id} className="bg-white p-3 mb-2 rounded-xl border border-gray-100 flex-row items-center">
                 <View className="mr-3 bg-gray-50 p-2 rounded-lg">
                    <Feather name={item.tipo === 'ACTIVO' ? 'tag' : 'box'} size={20} color="#4b5563" />
@@ -329,9 +349,11 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
                   {item.tipo === 'LOTE' ? (
                      <View className="flex-row items-center border border-gray-200 rounded-lg">
                         <TextInput 
-                          className="w-10 text-center py-1 font-bold"
+                          className="w-12 text-center py-1 font-bold text-gray-800"
                           keyboardType="numeric"
-                          value={item.cantidad_seleccionada.toString()}
+                          // Usamos String para que permita '' (vacío)
+                          value={item.cantidad_seleccionada === 0 ? '' : item.cantidad_seleccionada.toString()}
+                          placeholder="0"
                           onChangeText={(t) => updateCantidadLote(item.id, t, item.cantidad_disponible)}
                         />
                         <Text className="text-xs text-gray-400 pr-2">/ {item.cantidad_disponible}</Text>
@@ -344,38 +366,19 @@ export default function CrearPrestamoScreen({ navigation, route }: Props) {
                    <Feather name="trash-2" size={20} color="#ef4444" />
                 </TouchableOpacity>
              </View>
-           ))
+        ))}
+        {carrito.length === 0 && (
+           <View className="border-2 border-dashed border-gray-200 rounded-xl p-8 items-center mb-4"><Text className="text-gray-400">Lista vacía</Text></View>
         )}
 
         <View className="bg-white p-4 rounded-xl shadow-sm mt-2 mb-20">
-            <Text className="text-xs font-bold text-gray-400 uppercase mb-2">Notas</Text>
-            <TextInput 
-              className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 h-20"
-              placeholder="Motivo del préstamo..."
-              multiline
-              textAlignVertical="top"
-              value={notas}
-              onChangeText={setNotas}
-            />
+            <TextInput className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 h-20" placeholder="Notas..." multiline textAlignVertical="top" value={notas} onChangeText={setNotas} />
         </View>
-
       </ScrollView>
 
-      {/* Footer Botón */}
       <View className="p-4 bg-white border-t border-gray-100">
-        <TouchableOpacity 
-          onPress={handleSubmit}
-          disabled={isLoading}
-          className={`py-4 rounded-xl flex-row justify-center items-center ${isLoading ? 'bg-gray-400' : 'bg-bomberil-700'}`}
-        >
-           {isLoading ? (
-             <ActivityIndicator color="white" /> 
-           ) : (
-             <>
-               <Feather name="check-circle" size={20} color="white" />
-               <Text className="text-white font-bold text-lg ml-2">Confirmar Préstamo</Text>
-             </>
-           )}
+        <TouchableOpacity onPress={handleSubmit} disabled={isLoading} className={`py-4 rounded-xl flex-row justify-center items-center ${isLoading ? 'bg-gray-400' : 'bg-bomberil-700'}`}>
+           {isLoading ? <ActivityIndicator color="white" /> : <Text className="text-white font-bold text-lg ml-2">Confirmar</Text>}
         </TouchableOpacity>
       </View>
 

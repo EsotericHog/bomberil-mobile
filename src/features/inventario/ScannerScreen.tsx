@@ -17,9 +17,9 @@ export default function ScannerScreen() {
   
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<ScannerRouteProp>(); // Hook para obtener params
-  
   const insets = useSafeAreaInsets();
-  const { fetchExistenciaByQR } = useInventoryStore();
+
+  const { fetchExistenciaByQR, setScannedCode } = useInventoryStore();
 
   // Capturamos si hay una pantalla de retorno definida
   const returnScreen = route.params?.returnScreen;
@@ -43,9 +43,10 @@ export default function ScannerScreen() {
     
     // --- LÓGICA DE RETORNO (Nuevo Préstamo) ---
     if (returnScreen) {
-      // Si nos llamaron para seleccionar un ítem, devolvemos el código y salimos
-      // @ts-ignore - TypeScript puede quejarse de la navegación dinámica, pero es válida
-      navigation.navigate(returnScreen, { scannedCode: data });
+      // 1. Guardamos el código en el buzón global
+      setScannedCode(data);
+      // 2. Volvemos atrás (Cierra el scanner y revela la pantalla anterior intacta)
+      navigation.goBack();
       return;
     }
 

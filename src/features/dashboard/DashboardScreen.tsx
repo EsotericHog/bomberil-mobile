@@ -7,6 +7,7 @@ import { useUsersStore } from '@/store/usersStore';
 import { Feather } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '@/navigation/types';
+import { useFocusEffect } from '@react-navigation/native';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'Dashboard'>;
 
@@ -25,7 +26,7 @@ export default function DashboardScreen({ navigation, route }: Props) {
   const { user, estacion, signOut, hasPermission } = useAuthStore();
 
   // Stores para la lógica de escáner
-  const { fetchExistenciaByQR } = useInventoryStore();
+  const { fetchExistenciaByQR, scannedCode, setScannedCode } = useInventoryStore();
   const { fetchFichaMedica } = useUsersStore();
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -36,13 +37,14 @@ export default function DashboardScreen({ navigation, route }: Props) {
   const puedeVerUsuarios = hasPermission('acceso_gestion_usuarios');
 
   // --- ESCUCHAR RETORNO DEL ESCÁNER ---
-  useEffect(() => {
-    if (route.params?.scannedCode) {
-      const code = route.params.scannedCode;
-      navigation.setParams({ scannedCode: undefined }); // Limpiar para no repetir
-      handleSmartScan(code);
-    }
-  }, [route.params?.scannedCode]);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (scannedCode) {
+        handleSmartScan(scannedCode);
+        setScannedCode(null); // Limpiar buzón
+      }
+    }, [scannedCode])
+  );
 
   const handleSmartScan = async (code: string) => {
     setIsProcessing(true);

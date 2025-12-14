@@ -40,6 +40,9 @@ interface InventoryState {
   clearCurrentExistencia: () => void;
   clearExistenciasProducto: () => void;
 
+  scannedCode: string | null; 
+  setScannedCode: (code: string | null) => void;
+
   // Acciones para selectores
   fetchProveedores: (search?: string) => Promise<void>;
   fetchUbicaciones: (soloFisicas?: boolean) => Promise<void>;
@@ -56,6 +59,8 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
   proveedores: [],
   ubicaciones: [],
   compartimentos: [],
+  scannedCode: null,
+  setScannedCode: (code) => set({ scannedCode: code }),
 
   fetchExistenciaByQR: async (codigo: string, suppressError = false) => {
     set({ isLoading: true, error: null });
