@@ -11,6 +11,7 @@ export const API_URL = 'http://192.168.101.5:8000/api/v1/';
 
 const client = axios.create({
   baseURL: API_URL,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
