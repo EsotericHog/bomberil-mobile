@@ -3,6 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, TextInput, ActivityIndicator, S
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useLoansStore } from '@/store/loansStore';
+import { useAuthStore } from '@/store/authStore';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '@/navigation/types';
 import { PrestamoResumen } from '@/features/inventario/types';
@@ -12,19 +13,39 @@ type Props = NativeStackScreenProps<AppStackParamList, 'PrestamosHome'>;
 
 export default function PrestamosHomeScreen({ navigation }: Props) {
   const { prestamos, isLoading, fetchPrestamos } = useLoansStore();
+  const { hasPermission } = useAuthStore(); // Hook de permisos
+
   const [showAll, setShowAll] = useState(false); // false = Solo Activos, true = Todos
   const [searchText, setSearchText] = useState('');
+
+  // --- PERMISOS ---
+  const canManageLoans = hasPermission('accion_gestion_inventario_gestionar_prestamos');
+  // Nota: Asumimos que si llegó aquí es porque tiene 'ver_prestamos', pero lo validamos al navegar al detalle.
+  const canViewDetail = hasPermission('accion_gestion_inventario_ver_prestamos');
 
   // Cargar datos al entrar a la pantalla
   useFocusEffect(
     useCallback(() => {
       fetchPrestamos(showAll, searchText);
-    }, [showAll]) // Recargar si cambia el filtro de estado
+    }, [showAll]) 
   );
 
-  // Manejar búsqueda
   const handleSearch = () => {
     fetchPrestamos(showAll, searchText);
+  };
+
+  const handleCreatePress = () => {
+    if (!canManageLoans) {
+      return Alert.alert("Acceso Denegado", "No tienes permisos para crear nuevos préstamos.");
+    }
+    navigation.navigate('CrearPrestamo');
+  };
+
+  const handleItemPress = (id: number) => {
+    if (!canViewDetail) {
+      return Alert.alert("Acceso Denegado", "No tienes permisos para ver el detalle.");
+    }
+    navigation.navigate('DetallePrestamo', { id });
   };
 
   const getStatusColor = (code: string) => {
@@ -40,7 +61,8 @@ export default function PrestamosHomeScreen({ navigation }: Props) {
   const renderItem = ({ item }: { item: PrestamoResumen }) => (
     <TouchableOpacity 
       className="bg-white p-4 mb-3 rounded-2xl border border-gray-100 shadow-sm"
-      onPress={() => navigation.navigate('DetallePrestamo', { id: item.id })}
+      onPress={() => handleItemPress(item.id)}
+      activeOpacity={canViewDetail ? 0.7 : 1}
     >
       <View className="flex-row justify-between items-start mb-2">
         <View className="flex-1">
@@ -63,7 +85,7 @@ export default function PrestamosHomeScreen({ navigation }: Props) {
             {item.total_items} ítem(s)
           </Text>
         </View>
-        <Feather name="chevron-right" size={18} color="#d1d5db" />
+        <Feather name={canViewDetail ? "chevron-right" : "lock"} size={18} color="#d1d5db" />
       </View>
     </TouchableOpacity>
   );
@@ -82,12 +104,13 @@ export default function PrestamosHomeScreen({ navigation }: Props) {
             <Text className="text-xl font-bold text-gray-800 ml-2">Préstamos</Text>
           </View>
           
-          {/* Botón Crear Nuevo */}
+          {/* Botón Crear Nuevo (Protegido) */}
           <TouchableOpacity 
-            onPress={() => navigation.navigate('CrearPrestamo')} // <--- CONEXIÓN REAL
-            className="bg-gray-900 px-3 py-2 rounded-lg flex-row items-center"
+            onPress={handleCreatePress}
+            disabled={!canManageLoans}
+            className={`px-3 py-2 rounded-lg flex-row items-center ${canManageLoans ? 'bg-gray-900' : 'bg-gray-300'}`}
           >
-            <Feather name="plus" size={16} color="white" />
+            <Feather name={canManageLoans ? "plus" : "lock"} size={16} color="white" />
             <Text className="text-white font-bold text-xs ml-1">Nuevo</Text>
           </TouchableOpacity>
         </View>
@@ -106,7 +129,6 @@ export default function PrestamosHomeScreen({ navigation }: Props) {
             />
           </View>
           
-          {/* Toggle Activos/Todos */}
           <TouchableOpacity 
             onPress={() => setShowAll(!showAll)}
             className={`px-4 py-2 rounded-xl justify-center border ${showAll ? 'bg-gray-200 border-gray-300' : 'bg-white border-gray-200'}`}
@@ -128,7 +150,7 @@ export default function PrestamosHomeScreen({ navigation }: Props) {
             keyExtractor={(item) => item.id.toString()}
             renderItem={renderItem}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 80 }} // Espacio extra abajo
+            contentContainerStyle={{ paddingBottom: 80 }}
             ListEmptyComponent={
               <View className="mt-20 items-center px-10">
                 <View className="bg-gray-100 p-4 rounded-full mb-4">

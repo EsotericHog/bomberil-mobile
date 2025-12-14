@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Image, ActivityIndicator, Ale
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useUsersStore } from '@/store/usersStore';
+import { useAuthStore } from '@/store/authStore'; // Importar AuthStore
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '@/navigation/types';
 
@@ -11,12 +12,24 @@ type Props = NativeStackScreenProps<AppStackParamList, 'UsuarioDetalle'>;
 export default function UsuarioDetalleScreen({ navigation, route }: Props) {
   const { id } = route.params;
   const { selectedUsuario, isLoading, fetchUsuarioDetalle, fetchFichaMedica } = useUsersStore();
+  const { hasPermission } = useAuthStore(); // Hook de permisos
+
+  // --- PERMISOS ---
+  // 1. Permiso para ver la Hoja de Vida Completa
+  const canViewHojaVida = hasPermission('accion_gestion_voluntarios_ver_voluntarios');
+  
+  // 2. Permiso para ver datos médicos sensibles
+  const canViewFichaMedica = hasPermission('accion_gestion_medica_ver_fichas_medicas');
 
   useEffect(() => {
     fetchUsuarioDetalle(id);
   }, [id]);
 
   const handleVerFicha = async () => {
+    if (!canViewFichaMedica) {
+      return Alert.alert("Acceso Denegado", "No tienes permisos para ver fichas médicas.");
+    }
+
     // El store maneja el fetch y devuelve false si hay error (ej: 403 Forbidden)
     const success = await fetchFichaMedica(id);
     if (success) {
@@ -25,6 +38,10 @@ export default function UsuarioDetalleScreen({ navigation, route }: Props) {
   };
 
   const handleVerHojaVida = async () => {
+      if (!canViewHojaVida) {
+        return Alert.alert("Acceso Denegado", "No tienes permisos para acceder a la hoja de vida.");
+      }
+
       // Cargamos los datos antes de navegar
       await useUsersStore.getState().fetchHojaVida(id);
       navigation.navigate('HojaVida', { id });
@@ -39,6 +56,12 @@ export default function UsuarioDetalleScreen({ navigation, route }: Props) {
   }
 
   if (!selectedUsuario) return null;
+
+  // Helper para estilos de botones bloqueados
+  const getButtonStyle = (enabled: boolean) => 
+    `bg-white p-4 rounded-xl shadow-sm mb-3 flex-row items-center justify-between border ${
+      enabled ? 'border-gray-100' : 'border-gray-200 opacity-60 bg-gray-50'
+    }`;
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -78,7 +101,7 @@ export default function UsuarioDetalleScreen({ navigation, route }: Props) {
             </SafeAreaView>
         </View>
 
-        {/* INFO BÁSICA */}
+        {/* INFO BÁSICA (Visible para quien pueda ver la lista) */}
         <View className="p-4">
             <View className="bg-white p-4 rounded-xl shadow-sm mb-4">
                 <Text className="text-xs font-bold text-gray-400 uppercase mb-3">Información de Contacto</Text>
@@ -97,39 +120,51 @@ export default function UsuarioDetalleScreen({ navigation, route }: Props) {
                 </View>
             </View>
 
-            {/* BOTONES DE ACCIÓN */}
+            {/* BOTONES DE ACCIÓN (PROTEGIDOS) */}
             <Text className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Documentación</Text>
             
+            {/* 1. Botón Hoja de Vida */}
             <TouchableOpacity 
                 onPress={handleVerHojaVida}
-                className="bg-white p-4 rounded-xl shadow-sm mb-3 flex-row items-center justify-between border border-gray-100"
+                disabled={!canViewHojaVida}
+                className={getButtonStyle(canViewHojaVida)}
             >
                 <View className="flex-row items-center">
-                    <View className="bg-blue-100 p-2 rounded-lg">
-                        <Feather name="file-text" size={24} color="#2563eb" />
+                    <View className={`p-2 rounded-lg ${canViewHojaVida ? 'bg-blue-100' : 'bg-gray-200'}`}>
+                        <Feather name="file-text" size={24} color={canViewHojaVida ? "#2563eb" : "#9ca3af"} />
                     </View>
                     <View className="ml-3">
-                        <Text className="font-bold text-gray-800 text-base">Hoja de Vida</Text>
-                        <Text className="text-gray-500 text-xs">Historial, cargos y premios</Text>
+                        <Text className={`font-bold text-base ${canViewHojaVida ? 'text-gray-800' : 'text-gray-400'}`}>
+                            Hoja de Vida
+                        </Text>
+                        <Text className="text-gray-500 text-xs">
+                            {canViewHojaVida ? "Historial, cargos y premios" : "Acceso restringido"}
+                        </Text>
                     </View>
                 </View>
-                <Feather name="chevron-right" size={20} color="#d1d5db" />
+                <Feather name={canViewHojaVida ? "chevron-right" : "lock"} size={20} color="#d1d5db" />
             </TouchableOpacity>
 
+            {/* 2. Botón Ficha Médica */}
             <TouchableOpacity 
                 onPress={handleVerFicha}
-                className="bg-white p-4 rounded-xl shadow-sm mb-3 flex-row items-center justify-between border border-gray-100"
+                disabled={!canViewFichaMedica}
+                className={getButtonStyle(canViewFichaMedica)}
             >
                 <View className="flex-row items-center">
-                    <View className="bg-red-100 p-2 rounded-lg">
-                        <Feather name="activity" size={24} color="#b91c1c" />
+                    <View className={`p-2 rounded-lg ${canViewFichaMedica ? 'bg-red-100' : 'bg-gray-200'}`}>
+                        <Feather name="activity" size={24} color={canViewFichaMedica ? "#b91c1c" : "#9ca3af"} />
                     </View>
                     <View className="ml-3">
-                        <Text className="font-bold text-gray-800 text-base">Ficha Médica</Text>
-                        <Text className="text-gray-500 text-xs">Alergias, enfermedades y datos</Text>
+                        <Text className={`font-bold text-base ${canViewFichaMedica ? 'text-gray-800' : 'text-gray-400'}`}>
+                            Ficha Médica
+                        </Text>
+                        <Text className="text-gray-500 text-xs">
+                            {canViewFichaMedica ? "Alergias, enfermedades y datos" : "Acceso restringido"}
+                        </Text>
                     </View>
                 </View>
-                <Feather name="chevron-right" size={20} color="#d1d5db" />
+                <Feather name={canViewFichaMedica ? "chevron-right" : "lock"} size={20} color="#d1d5db" />
             </TouchableOpacity>
 
         </View>

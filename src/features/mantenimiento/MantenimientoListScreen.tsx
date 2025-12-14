@@ -3,6 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, TextInput, ActivityIndicator, S
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useMaintenanceStore } from '@/store/maintenanceStore';
+import { useAuthStore } from '@/store/authStore'; // Importar AuthStore
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '@/navigation/types';
 import { useFocusEffect } from '@react-navigation/native';
@@ -12,19 +13,38 @@ type Props = NativeStackScreenProps<AppStackParamList, 'MantenimientoList'>;
 
 export default function MantenimientoListScreen({ navigation }: Props) {
   const { ordenes, isLoading, fetchOrdenes } = useMaintenanceStore();
+  const { hasPermission } = useAuthStore(); // Hook de permisos
   
   // Estado local
   const [tab, setTab] = useState<'activos' | 'historial'>('activos');
   const [searchText, setSearchText] = useState('');
 
+  // --- PERMISOS ---
+  const canManageOrders = hasPermission('accion_gestion_mantenimiento_gestionar_ordenes'); // Crear/Editar
+  const canViewDetail = hasPermission('accion_gestion_mantenimiento_ver_ordenes'); // Ver detalle
+
   useFocusEffect(
     useCallback(() => {
       fetchOrdenes(tab, searchText);
-    }, [tab]) // Recargar al cambiar pestaña
+    }, [tab]) 
   );
 
   const handleSearch = () => {
     fetchOrdenes(tab, searchText);
+  };
+
+  const handleCreatePress = () => {
+    if (!canManageOrders) {
+      return Alert.alert("Acceso Denegado", "No tienes permisos para crear órdenes de trabajo.");
+    }
+    navigation.navigate('CrearOrden');
+  };
+
+  const handleItemPress = (id: number) => {
+    if (!canViewDetail) {
+      return Alert.alert("Acceso Denegado", "No tienes permisos para ver el detalle de la orden.");
+    }
+    navigation.navigate('DetalleOrden', { id });
   };
 
   const getStatusColor = (code: string) => {
@@ -40,7 +60,8 @@ export default function MantenimientoListScreen({ navigation }: Props) {
   const renderItem = ({ item }: { item: OrdenResumen }) => (
     <TouchableOpacity 
       className="bg-white p-4 mb-3 rounded-2xl border border-gray-100 shadow-sm"
-      onPress={() => navigation.navigate('DetalleOrden', { id: item.id })} // <--- CONEXIÓN REAL
+      onPress={() => handleItemPress(item.id)}
+      activeOpacity={canViewDetail ? 0.7 : 1}
     >
       <View className="flex-row justify-between items-start mb-2">
         <View className="flex-1 pr-2">
@@ -95,12 +116,13 @@ export default function MantenimientoListScreen({ navigation }: Props) {
             <Text className="text-xl font-bold text-gray-800 ml-2">Mantenimiento</Text>
           </View>
           
-          {/* Botón Nueva Correctiva */}
+          {/* Botón Nueva Correctiva (Protegido) */}
           <TouchableOpacity 
-            onPress={() => navigation.navigate('CrearOrden')}
-            className="bg-gray-900 px-3 py-2 rounded-lg flex-row items-center shadow-sm"
+            onPress={handleCreatePress}
+            disabled={!canManageOrders}
+            className={`px-3 py-2 rounded-lg flex-row items-center shadow-sm ${canManageOrders ? 'bg-gray-900' : 'bg-gray-300'}`}
           >
-            <Feather name="plus" size={16} color="white" />
+            <Feather name={canManageOrders ? "plus" : "lock"} size={16} color="white" />
             <Text className="text-white font-bold text-xs ml-1">Correctiva</Text>
           </TouchableOpacity>
         </View>

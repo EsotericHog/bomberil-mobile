@@ -56,9 +56,22 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
 
   // --- EFECTOS ---
 
-  // 1. Carga inicial y limpieza
+  // 1. Carga inicial con manejo de error
   useEffect(() => {
-    fetchDetalleOrden(id);
+    const loadData = async () => {
+      const success = await fetchDetalleOrden(id);
+      if (!success) {
+        // Si falla (ej: 403), mostramos alerta y volvemos atrás
+        Alert.alert(
+          "Error de Acceso",
+          "No tienes permisos para ver el detalle de esta orden o no existe.",
+          [{ text: "Volver", onPress: () => navigation.goBack() }]
+        );
+      }
+    };
+    
+    loadData();
+
     return () => {
       clearCurrentOrden();
       clearBusqueda();

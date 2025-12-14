@@ -16,9 +16,10 @@ interface MaintenanceState {
 
   // Acciones
   fetchOrdenes: (estado?: 'activos' | 'historial', q?: string) => Promise<void>;
-  fetchDetalleOrden: (id: number) => Promise<void>;
+  // CAMBIO: Ahora devuelve Promise<boolean>
+  fetchDetalleOrden: (id: number) => Promise<boolean>; 
   fetchActivoByCodeForOrder: (ordenId: number, code: string) => Promise<ActivoBusquedaOrden | null>;
-  crearOrden: (payload: CrearOrdenPayload) => Promise<number | null>; // Retorna ID si éxito
+  crearOrden: (payload: CrearOrdenPayload) => Promise<number | null>; 
   
   cambiarEstadoOrden: (id: number, accion: AccionOrden) => Promise<boolean>;
   
@@ -50,28 +51,37 @@ export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
     }
   },
 
+  // --- LÓGICA MEJORADA ---
   fetchDetalleOrden: async (id) => {
     set({ isLoading: true, error: null, currentOrden: null });
     try {
       const response = await client.get(ENDPOINTS.MANTENIMIENTO.DETALLE_ORDEN(id));
       set({ currentOrden: response.data, isLoading: false });
-    } catch (error) {
+      return true; // Éxito
+    } catch (error: any) {
       console.log("Error fetchDetalleOrden", error);
-      set({ error: "Error cargando detalle", isLoading: false });
+      
+      const msg = error.response?.status === 403 
+        ? "No tienes permiso para ver esta orden." 
+        : "No se pudo cargar el detalle.";
+        
+      set({ error: msg, isLoading: false });
+      
+      // Opcional: Mostrar alerta aquí o dejar que la pantalla lo haga
+      // Si la pantalla lo maneja, retornamos false
+      return false; 
     }
   },
 
   fetchActivoByCodeForOrder: async (ordenId, code) => {
     set({ isLoading: true });
     try {
-      // Reutilizamos el endpoint de búsqueda
       const response = await client.get(ENDPOINTS.MANTENIMIENTO.BUSCAR_ACTIVO(ordenId, code));
       const results = response.data.results || [];
       
       set({ isLoading: false });
 
       if (Array.isArray(results) && results.length > 0) {
-        // Priorizar coincidencia exacta
         const exactMatch = results.find((i: any) => i.codigo.toUpperCase() === code.toUpperCase());
         return exactMatch || results[0];
       }
@@ -86,7 +96,6 @@ export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
   crearOrden: async (payload) => {
     set({ isLoading: true });
     try {
-      // Backend espera: { descripcion, fecha_programada, ... }
       const response = await client.post(ENDPOINTS.MANTENIMIENTO.CREAR_ORDEN, payload);
       set({ isLoading: false });
       return response.data.id;
@@ -101,12 +110,8 @@ export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
   cambiarEstadoOrden: async (id, accion) => {
     set({ isLoading: true });
     try {
-      // Backend espera: POST { accion: 'iniciar' }
       await client.post(ENDPOINTS.MANTENIMIENTO.CAMBIAR_ESTADO(id), { accion });
-      
-      // Refrescar detalle tras cambio
       await get().fetchDetalleOrden(id);
-      // Refrescar lista global background
       get().fetchOrdenes();
       
       set({ isLoading: false });
@@ -124,7 +129,7 @@ export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
     set({ isLoading: true });
     try {
       const response = await client.get(ENDPOINTS.MANTENIMIENTO.BUSCAR_ACTIVO(ordenId, query));
-      set({ activosBusqueda: response.data.results || [], isLoading: false }); // Backend devuelve { results: [] }
+      set({ activosBusqueda: response.data.results || [], isLoading: false });
     } catch (error) {
       set({ activosBusqueda: [], isLoading: false });
     }
@@ -133,7 +138,6 @@ export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
   anadirActivoAOrden: async (ordenId, activoId) => {
     try {
       await client.post(ENDPOINTS.MANTENIMIENTO.ANADIR_ACTIVO(ordenId), { activo_id: activoId });
-      // Refrescar detalle para ver el activo añadido
       await get().fetchDetalleOrden(ordenId);
       return true;
     } catch (error: any) {
@@ -156,9 +160,8 @@ export const useMaintenanceStore = create<MaintenanceState>((set, get) => ({
   registrarTarea: async (ordenId, payload) => {
     set({ isLoading: true });
     try {
-      // Backend espera: { activo_id, notas, exitoso }
       await client.post(ENDPOINTS.MANTENIMIENTO.REGISTRAR_TAREA(ordenId), payload);
-      await get().fetchDetalleOrden(ordenId); // Refrescar para ver el item como COMPLETADO
+      await get().fetchDetalleOrden(ordenId);
       set({ isLoading: false });
       return true;
     } catch (error: any) {
