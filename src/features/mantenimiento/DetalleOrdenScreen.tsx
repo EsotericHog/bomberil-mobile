@@ -43,11 +43,9 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
-
   // Estados Locales: Búsqueda Inteligente (Manual)
   const [showSmartModal, setShowSmartModal] = useState(false);
   const [smartInput, setSmartInput] = useState('');
-
   // Estados Locales: Tareas (Ejecución)
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [selectedActivo, setSelectedActivo] = useState<ItemOrden | null>(null);
@@ -55,10 +53,22 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
   const [taskSuccess, setTaskSuccess] = useState(true);
 
   // --- EFECTOS ---
-
-  // 1. Carga inicial y limpieza
+  // 1. Carga inicial con manejo de error
   useEffect(() => {
-    fetchDetalleOrden(id);
+    const loadData = async () => {
+      const success = await fetchDetalleOrden(id);
+      if (!success) {
+        // Si falla (ej: 403), mostramos alerta y volvemos atrás
+        Alert.alert(
+          "Error de Acceso",
+          "No tienes permisos para ver el detalle de esta orden o no existe.",
+          [{ text: "Volver", onPress: () => navigation.goBack() }]
+        );
+      }
+    };
+    
+    loadData();
+
     return () => {
       clearCurrentOrden();
       clearBusqueda();
@@ -111,6 +121,20 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
     } else {
         Alert.alert("No disponible", `El activo ${finalCode} no se encontró disponible para esta orden.`);
     }
+  };
+
+
+  // --- ACCIONES DE ESTADO ---
+  
+  const handleAsumir = () => {
+    Alert.alert(
+      "Asumir Responsabilidad",
+      "¿Deseas hacerte cargo de esta orden? Se te asignará como responsable y podrás gestionarla.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Sí, Asumir", onPress: async () => { await cambiarEstadoOrden(id, 'asumir'); } }
+      ]
+    );
   };
 
   // --- HANDLERS FASE 4 (Planificación) ---
@@ -224,9 +248,22 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
   if (!currentOrden) return null;
 
   const { cabecera, items } = currentOrden;
-  const isPendiente = cabecera.estado_codigo === 'PENDIENTE';
-  const isEnCurso = cabecera.estado_codigo === 'EN_CURSO';
-  const isFinalizada = cabecera.estado_codigo === 'REALIZADA' || cabecera.estado_codigo === 'CANCELADA';
+  // 1. Extraemos la responsabilidad del backend
+  const esResponsable = currentOrden?.cabecera.es_responsable || false;
+  
+  const isPendiente = currentOrden?.cabecera.estado_codigo === 'PENDIENTE';
+  const isEnCurso = currentOrden?.cabecera.estado_codigo === 'EN_CURSO';
+  const isFinalizada = currentOrden?.cabecera.estado_codigo === 'REALIZADA' || currentOrden?.cabecera.estado_codigo === 'CANCELADA';
+
+  // 2. Definimos permisos dinámicos
+  // SOLO el responsable puede gestionar (agregar/quitar items, iniciar, finalizar, tareas)
+  const canEditItems = esResponsable && isPendiente;
+  const canRegisterTasks = esResponsable && isEnCurso;
+  const canChangeState = esResponsable;
+  
+  // 3. Caso especial: Asumir responsabilidad
+  // Solo si está pendiente, NO soy yo, Y ADEMÁS no tiene responsable asignado ("Sin asignar" o null en backend)
+   const canAssumeResponsibility = !esResponsable && isPendiente && (!cabecera.responsable || cabecera.responsable === "Sin asignar");
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50" edges={['bottom']}>
@@ -249,14 +286,16 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
               <View className="bg-purple-100 px-2 py-1 rounded">
                  <Text className="text-[10px] font-bold text-purple-800 uppercase">{cabecera.tipo}</Text>
               </View>
-              <View className={`px-2 py-1 rounded border ${
-                 isPendiente ? 'bg-yellow-50 border-yellow-200' : 
-                 isEnCurso ? 'bg-blue-50 border-blue-200' : 'bg-green-50 border-green-200'
-              }`}>
-                 <Text className={`text-[10px] font-bold uppercase ${
-                    isPendiente ? 'text-yellow-800' : isEnCurso ? 'text-blue-800' : 'text-green-800'
-                 }`}>{cabecera.estado}</Text>
-              </View>
+              {/* Badge Responsable */}
+              {esResponsable ? (
+                 <View className="bg-indigo-100 px-2 py-1 rounded border border-indigo-200">
+                    <Text className="text-[10px] font-bold text-indigo-800 uppercase">ERES RESPONSABLE</Text>
+                 </View>
+              ) : (
+                 <View className="bg-gray-100 px-2 py-1 rounded border border-gray-200">
+                    <Text className="text-[10px] font-bold text-gray-500 uppercase">SOLO LECTURA</Text>
+                 </View>
+              )}
            </View>
            
            <Text className="text-xl font-bold text-gray-900 mb-2">{cabecera.titulo}</Text>
@@ -269,7 +308,7 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
               </View>
               <View className="flex-row items-center">
                  <Feather name="user" size={14} color="#6b7280" />
-                 <Text className="text-xs text-gray-500 ml-1">{cabecera.responsable.split(' ')[0]}</Text>
+                 <Text className="text-xs text-gray-500 ml-1">{cabecera.responsable || "Sin asignar"}</Text>
               </View>
            </View>
         </View>
@@ -279,10 +318,9 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
             Activos Asignados ({items.length})
         </Text>
 
-        {/* Solo mostramos la barra de acciones si está PENDIENTE */}
-        {isPendiente && (
+        {/* BARRA DE ACCIONES (Solo si es responsable y está pendiente) */}
+        {canEditItems && (
             <View className="flex-row justify-between mb-4">
-                {/* 1. Botón ESCÁNER */}
                 <TouchableOpacity 
                     onPress={() => navigation.navigate('ScannerInventario', { returnScreen: 'DetalleOrden' })}
                     className="flex-1 bg-gray-800 p-3 rounded-xl mr-2 flex-row justify-center items-center shadow-sm"
@@ -291,7 +329,6 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
                     <Text className="text-white font-bold ml-2 text-xs">Escanear</Text>
                 </TouchableOpacity>
 
-                {/* 2. Botón MANUAL INTELIGENTE */}
                 <TouchableOpacity 
                     onPress={() => setShowSmartModal(true)}
                     className="flex-1 bg-white border border-gray-200 p-3 rounded-xl mr-2 flex-row justify-center items-center shadow-sm"
@@ -300,7 +337,6 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
                     <Text className="text-gray-700 font-bold ml-2 text-xs">Manual</Text>
                 </TouchableOpacity>
 
-                {/* 3. Botón CATÁLOGO (Lupa) */}
                 <TouchableOpacity 
                     onPress={() => setShowAddModal(true)}
                     className="bg-white border border-gray-200 p-3 rounded-xl flex-row justify-center items-center shadow-sm"
@@ -310,27 +346,26 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
             </View>
         )}
 
-        {/* RENDERIZADO DE ITEMS */}
+        {/* LISTA DE ITEMS */}
         {items.length === 0 ? (
            <View className="border-2 border-dashed border-gray-200 rounded-xl p-8 items-center mb-4 bg-gray-50/50">
               <Feather name="tool" size={32} color="#d1d5db" />
               <Text className="text-gray-400 text-sm mt-2 text-center">
-                 No hay activos en esta orden.{'\n'}Agrega los equipos a reparar.
+                 No hay activos en esta orden.
               </Text>
            </View>
         ) : (
             items.map((item) => (
                   <TouchableOpacity 
                      key={item.id} 
-                     // Si está EN_CURSO y NO completado, permitir click para registrar. Si es PENDIENTE, nada (o borrar).
-                     disabled={!(isEnCurso && item.estado_trabajo !== 'COMPLETADO')}
+                     // Click solo si puede registrar tareas
+                     disabled={!(canRegisterTasks && item.estado_trabajo !== 'COMPLETADO')}
                      onPress={() => handleOpenTaskModal(item)}
                      activeOpacity={0.7}
                      className={`bg-white p-3 mb-2 rounded-xl border flex-row items-center ${
                         item.estado_trabajo === 'COMPLETADO' ? 'border-green-100 opacity-80' : 'border-gray-100'
                      }`}
                   >
-                     {/* Imagen / Icono */}
                      <View className="w-10 h-10 bg-gray-50 rounded-lg justify-center items-center mr-3 overflow-hidden">
                         {item.imagen_url ? (
                            <Image source={{ uri: item.imagen_url }} className="w-full h-full" resizeMode="cover" />
@@ -339,40 +374,27 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
                         )}
                      </View>
                      
-                     {/* Datos Activo */}
                      <View className="flex-1">
                         <Text className="font-bold text-gray-800 text-sm" numberOfLines={1}>{item.nombre}</Text>
                         <Text className="text-xs text-gray-500">{item.codigo}</Text>
                         <Text className="text-[10px] text-gray-400" numberOfLines={1}>{item.ubicacion}</Text>
                      </View>
 
-                     {/* Estado / Acciones Individuales */}
                      <View className="ml-2">
-                        {isPendiente && (
+                        {canEditItems && (
                             <TouchableOpacity onPress={() => handleRemoveActivo(item)} className="p-2">
                                <Feather name="trash-2" size={18} color="#ef4444" />
                             </TouchableOpacity>
                         )}
 
-                        {isEnCurso && (
-                            <View className={`px-3 py-1.5 rounded-full flex-row items-center ${
-                               item.estado_trabajo === 'COMPLETADO' ? 'bg-green-100' : 'bg-blue-50 border border-blue-100'
-                            }`}>
-                               {item.estado_trabajo === 'COMPLETADO' ? (
-                                  <>
-                                    <Feather name="check" size={14} color="green" />
-                                    <Text className="text-[10px] font-bold text-green-800 ml-1">Listo</Text>
-                                  </>
-                               ) : (
-                                  <>
-                                    <Feather name="edit-2" size={14} color="#2563eb" />
-                                    <Text className="text-[10px] font-bold text-blue-700 ml-1">Registrar</Text>
-                                  </>
-                               )}
+                        {canRegisterTasks && item.estado_trabajo !== 'COMPLETADO' && (
+                            <View className="px-3 py-1.5 rounded-full flex-row items-center bg-blue-50 border border-blue-100">
+                                <Feather name="edit-2" size={14} color="#2563eb" />
+                                <Text className="text-[10px] font-bold text-blue-700 ml-1">Registrar</Text>
                             </View>
                         )}
 
-                        {isFinalizada && item.estado_trabajo === 'COMPLETADO' && (
+                        {(item.estado_trabajo === 'COMPLETADO') && (
                             <Feather name="check-circle" size={20} color="green" />
                         )}
                      </View>
@@ -384,13 +406,33 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
         <View className="h-24" />
       </ScrollView>
 
-      {/* FOOTER ACTIONS: PENDIENTE (INICIAR) */}
-      {isPendiente && (
+      {/* FOOTER ACTIONS: BARRA FLOTANTE DE ACCIONES GLOBALES */}
+      
+      {/* 1. ASUMIR RESPONSABILIDAD (Si no soy responsable y está pendiente) */}
+      {canAssumeResponsibility && (
+         <View className="p-4 bg-white border-t border-gray-100 absolute bottom-0 left-0 right-0">
+            <TouchableOpacity 
+               onPress={handleAsumir}
+               disabled={isLoading}
+               className="py-4 rounded-xl flex-row justify-center items-center shadow-lg bg-indigo-700"
+            >
+               {isLoading ? <ActivityIndicator color="white" /> : (
+                  <>
+                     <Feather name="user-plus" size={20} color="white" />
+                     <Text className="text-white font-bold text-lg ml-2">Asumir Responsabilidad</Text>
+                  </>
+               )}
+            </TouchableOpacity>
+         </View>
+      )}
+
+      {/* 2. INICIAR (Si soy responsable y está pendiente) */}
+      {canChangeState && isPendiente && (
          <View className="p-4 bg-white border-t border-gray-100 absolute bottom-0 left-0 right-0">
             <TouchableOpacity 
                onPress={handleIniciarOrden}
                disabled={isLoading}
-               className={`py-4 rounded-xl flex-row justify-center items-center shadow-lg ${isLoading ? 'bg-gray-400' : 'bg-gray-900'}`}
+               className="py-4 rounded-xl flex-row justify-center items-center shadow-lg bg-gray-900"
             >
                {isLoading ? <ActivityIndicator color="white" /> : (
                   <>
@@ -402,13 +444,13 @@ export default function DetalleOrdenScreen({ navigation, route }: Props) {
          </View>
       )}
 
-      {/* FOOTER ACTIONS: EN CURSO (FINALIZAR) */}
-      {isEnCurso && (
+      {/* 3. FINALIZAR (Si soy responsable y está en curso) */}
+      {canChangeState && isEnCurso && (
          <View className="p-4 bg-white border-t border-gray-100 absolute bottom-0 left-0 right-0">
             <TouchableOpacity 
                onPress={handleFinalizarOrden}
                disabled={isLoading}
-               className={`py-4 rounded-xl flex-row justify-center items-center shadow-lg ${isLoading ? 'bg-gray-400' : 'bg-green-700'}`}
+               className="py-4 rounded-xl flex-row justify-center items-center shadow-lg bg-green-700"
             >
                {isLoading ? <ActivityIndicator color="white" /> : (
                   <>

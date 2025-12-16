@@ -1,7 +1,7 @@
 // Basado en models.py
 export type EstadoOrden = 'PENDIENTE' | 'EN_CURSO' | 'REALIZADA' | 'CANCELADA';
 export type TipoOrden = 'PROGRAMADA' | 'CORRECTIVA';
-export type AccionOrden = 'iniciar' | 'finalizar' | 'cancelar';
+export type AccionOrden = 'iniciar' | 'finalizar' | 'cancelar' | 'asumir';
 
 // Resumen para la lista (MantenimientoOrdenListAPIView)
 export interface OrdenResumen {
@@ -13,6 +13,7 @@ export interface OrdenResumen {
   estado_codigo: EstadoOrden;
   fecha_programada: string;
   responsable: string;
+  es_responsable: boolean;
   es_vencido: boolean;
   activos_count: number;
 }
@@ -40,6 +41,7 @@ export interface OrdenDetalleFull {
     estado_codigo: EstadoOrden;
     fecha_programada: string;
     responsable: string;
+    es_responsable: boolean;
   };
   progreso: {
     total: number;

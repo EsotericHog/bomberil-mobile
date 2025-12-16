@@ -16,7 +16,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '@/navigation/types';
-// Importamos el store para usar la acción de búsqueda
 import { useInventoryStore } from '@/store/inventoryStore';
 import { useAuthStore } from '@/store/authStore';
 
@@ -24,32 +23,44 @@ type Props = NativeStackScreenProps<AppStackParamList, 'InventarioHome'>;
 
 export default function InventarioScreen({ navigation }: Props) {
   const { fetchExistenciaByQR, isLoading } = useInventoryStore();
+  const { estacion, hasPermission } = useAuthStore(); // Obtenemos hasPermission
+  
+  // --- PERMISOS ---
+  // 1. Ver/Buscar Stock (Escanear y Manual)
+  const canViewStock = hasPermission('accion_gestion_inventario_ver_stock');
+  // 2. Ver Catálogos
+  const canViewCatalog = hasPermission('accion_gestion_inventario_ver_catalogos');
+  // 3. Recepcionar Stock
+  const canReceiveStock = hasPermission('accion_gestion_inventario_recepcionar_stock');
+  // 4. Ver Préstamos (Acceso al módulo)
+  const canViewLoans = hasPermission('accion_gestion_inventario_ver_prestamos');
 
-  // Obtenemos la estación del usuario logueado para construir el prefijo
-  const { estacion } = useAuthStore();
   
   // Estados para el Modal de Búsqueda Manual
   const [modalVisible, setModalVisible] = useState(false);
   const [manualInput, setManualInput] = useState('');
-  // Estado para el tipo de búsqueda predeterminado (para autocompletar)
   const [searchType, setSearchType] = useState<'ACT' | 'LOT'>('ACT');
 
   const handleScanPress = () => {
+    if (!canViewStock) {
+      return Alert.alert("Acceso Denegado", "No tienes permisos para consultar stock.");
+    }
     navigation.navigate('ScannerInventario'); 
+  };
+
+  const handleOpenManualSearch = () => {
+    if (!canViewStock) {
+      return Alert.alert("Acceso Denegado", "No tienes permisos para consultar stock.");
+    }
+    setModalVisible(true);
   };
 
   // Lógica de "Smart Search"
   const formatCode = (input: string): string => {
     const raw = input.trim().toUpperCase();
-    
-    // 1. Si ya parece un código completo (tiene guiones y longitud considerable), no tocar
     if (raw.includes('-') && raw.length > 8) return raw;
-
-    // 2. Si es solo número, construimos el código completo
-    // formato: {codigo de la estación}-{TIPO}-{número con padding 5}
     const stationCode = `${estacion?.codigo.toString().padStart(3, '0')}`;
     const numberPart = raw.padStart(5, '0');
-    
     return `${stationCode}-${searchType}-${numberPart}`;
   };
 
@@ -60,8 +71,6 @@ export default function InventarioScreen({ navigation }: Props) {
     }
 
     const finalCode = formatCode(manualInput);
-    console.log("Buscando código:", finalCode); // Para debug
-    // Reutilizamos la misma función del Scanner
     const success = await fetchExistenciaByQR(finalCode);
     
     if (success) {
@@ -69,11 +78,21 @@ export default function InventarioScreen({ navigation }: Props) {
       setManualInput('');
       navigation.navigate('DetalleExistencia', { sku: finalCode });
     } else {
-        // Feedback opcional si falla la búsqueda inteligente
-        // Podríamos sugerir al usuario que intente con el código completo si falló el automático
         Alert.alert("No encontrado", `No se encontró la existencia con código: ${finalCode}. \n\nVerifica si es un Activo o un Lote.`);
     }
-    // Si falla, el store ya maneja el Alert de error, no necesitamos else aquí.
+  };
+
+  // Helper para renderizar botones deshabilitados visualmente
+  const getButtonStyle = (enabled: boolean, baseStyle: string) => {
+    return enabled ? baseStyle : `${baseStyle} opacity-50 bg-gray-100 border-gray-200`;
+  };
+
+  const getTextStyle = (enabled: boolean, baseStyle: string) => {
+    return enabled ? baseStyle : "text-gray-400 font-bold ml-2";
+  };
+
+  const getIconColor = (enabled: boolean, defaultColor: string) => {
+    return enabled ? defaultColor : "#9ca3af";
   };
 
   return (
@@ -92,25 +111,31 @@ export default function InventarioScreen({ navigation }: Props) {
 
         <ScrollView showsVerticalScrollIndicator={false}>
           
-          {/* ACCIÓN PRINCIPAL: ESCANER */}
-          <View className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 items-center mb-8">
-            <View className="bg-red-50 p-4 rounded-full mb-4">
-              <Feather name="maximize" size={40} color="#b91c1c" />
+          {/* ACCIÓN PRINCIPAL: ESCANER (Protegido por canViewStock) */}
+          <View className={`rounded-3xl shadow-sm border p-6 items-center mb-8 ${canViewStock ? 'bg-white border-gray-100' : 'bg-gray-100 border-gray-200 opacity-80'}`}>
+            <View className={`p-4 rounded-full mb-4 ${canViewStock ? 'bg-red-50' : 'bg-gray-200'}`}>
+              <Feather name="maximize" size={40} color={canViewStock ? "#b91c1c" : "#9ca3af"} />
             </View>
-            <Text className="text-lg font-bold text-gray-900 text-center mb-2">
+            <Text className={`text-lg font-bold text-center mb-2 ${canViewStock ? 'text-gray-900' : 'text-gray-500'}`}>
               Escanear Existencia
             </Text>
             <Text className="text-gray-500 text-center text-sm mb-6 px-4">
-              Apunta al código QR del activo o lote para ver su hoja de vida y gestionar movimientos.
+              {canViewStock 
+                ? "Apunta al código QR del activo o lote para ver su hoja de vida y gestionar movimientos."
+                : "No tienes permisos para consultar o escanear existencias."
+              }
             </Text>
             
             <TouchableOpacity 
               onPress={handleScanPress}
-              className="bg-bomberil-700 w-full py-4 rounded-xl flex-row justify-center items-center shadow-md"
+              disabled={!canViewStock}
+              className={`w-full py-4 rounded-xl flex-row justify-center items-center shadow-md ${canViewStock ? 'bg-bomberil-700' : 'bg-gray-400'}`}
               activeOpacity={0.8}
             >
-              <Feather name="camera" size={20} color="white" />
-              <Text className="text-white font-bold text-lg ml-2">Abrir Escáner</Text>
+              <Feather name={canViewStock ? "camera" : "lock"} size={20} color="white" />
+              <Text className="text-white font-bold text-lg ml-2">
+                {canViewStock ? "Abrir Escáner" : "Acceso Bloqueado"}
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -120,38 +145,45 @@ export default function InventarioScreen({ navigation }: Props) {
           </Text>
 
           <View className="flex-row justify-between mb-4">
-            {/* BOTÓN BUSCAR MANUAL CONECTADO */}
+            {/* BOTÓN BUSCAR MANUAL (Protegido por canViewStock) */}
             <TouchableOpacity 
-              onPress={() => setModalVisible(true)}
-              className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-[48%] items-center"
+              onPress={handleOpenManualSearch}
+              disabled={!canViewStock}
+              className={getButtonStyle(canViewStock, "bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-[48%] items-center")}
             >
-              <Feather name="search" size={24} color="#4b5563" />
-              <Text className="text-gray-700 font-bold mt-2">Buscar Manual</Text>
+              <Feather name={canViewStock ? "search" : "lock"} size={24} color={getIconColor(canViewStock, "#4b5563")} />
+              <Text className={getTextStyle(canViewStock, "text-gray-700 font-bold mt-2")}>Buscar Manual</Text>
             </TouchableOpacity>
 
+            {/* BOTÓN CATÁLOGO (Protegido por canViewCatalog) */}
             <TouchableOpacity 
-              onPress={() => navigation.navigate('CatalogoLocal')} // <--- Conexión
-              className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-[48%] items-center"
+              onPress={() => canViewCatalog && navigation.navigate('CatalogoLocal')}
+              disabled={!canViewCatalog}
+              className={getButtonStyle(canViewCatalog, "bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-[48%] items-center")}
             >
-              <Feather name="list" size={24} color="#4b5563" />
-              <Text className="text-gray-700 font-bold mt-2">Catálogo Local</Text>
+              <Feather name={canViewCatalog ? "list" : "lock"} size={24} color={getIconColor(canViewCatalog, "#4b5563")} />
+              <Text className={getTextStyle(canViewCatalog, "text-gray-700 font-bold mt-2")}>Catálogo Local</Text>
             </TouchableOpacity>
           </View>
 
+          {/* BOTÓN RECEPCIÓN (Protegido por canReceiveStock) */}
           <TouchableOpacity 
-            onPress={() => navigation.navigate('RecepcionStock')} 
-            className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-full items-center mb-4 flex-row justify-center"
+            onPress={() => canReceiveStock && navigation.navigate('RecepcionStock')} 
+            disabled={!canReceiveStock}
+            className={getButtonStyle(canReceiveStock, "bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-full items-center mb-4 flex-row justify-center")}
           >
-            <Feather name="download-cloud" size={24} color="#4b5563" />
-            <Text className="text-gray-700 font-bold ml-2">Nueva Recepción de Stock</Text>
+            <Feather name={canReceiveStock ? "download-cloud" : "lock"} size={24} color={getIconColor(canReceiveStock, "#4b5563")} />
+            <Text className={getTextStyle(canReceiveStock, "text-gray-700 font-bold ml-2")}>Nueva Recepción de Stock</Text>
           </TouchableOpacity>
 
+          {/* BOTÓN PRÉSTAMOS (Protegido por canViewLoans) */}
           <TouchableOpacity 
-            onPress={() => navigation.navigate('PrestamosHome')} 
-            className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-full items-center mt-3 flex-row justify-center"
+            onPress={() => canViewLoans && navigation.navigate('PrestamosHome')} 
+            disabled={!canViewLoans}
+            className={getButtonStyle(canViewLoans, "bg-white p-4 rounded-2xl shadow-sm border border-gray-100 w-full items-center mt-3 flex-row justify-center")}
           >
-            <Feather name="share" size={24} color="#4b5563" />
-            <Text className="text-gray-700 font-bold ml-2">Gestión de Préstamos</Text>
+            <Feather name={canViewLoans ? "share" : "lock"} size={24} color={getIconColor(canViewLoans, "#4b5563")} />
+            <Text className={getTextStyle(canViewLoans, "text-gray-700 font-bold ml-2")}>Gestión de Préstamos</Text>
           </TouchableOpacity>
 
         </ScrollView>
@@ -186,7 +218,6 @@ export default function InventarioScreen({ navigation }: Props) {
                 Ingresa el número correlativo (ej: 32) y seleccionaremos el prefijo automáticamente.
               </Text>
               
-              {/* Selector de Tipo (Switch estilo Tabs) */}
               <View className="flex-row bg-gray-100 p-1 rounded-xl mb-4">
                 <TouchableOpacity 
                   onPress={() => setSearchType('ACT')}
@@ -209,7 +240,7 @@ export default function InventarioScreen({ navigation }: Props) {
                   placeholder="Ej: 32"
                   value={manualInput}
                   onChangeText={setManualInput}
-                  keyboardType="numeric" // Teclado numérico para velocidad
+                  keyboardType="numeric"
                   autoFocus={true}
                 />
               </View>

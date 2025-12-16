@@ -23,8 +23,22 @@ export default function DetallePrestamoScreen({ navigation, route }: Props) {
   
   const [inputs, setInputs] = useState<InputState>({});
 
+
+
   useEffect(() => {
-    fetchDetallePrestamo(id);
+    const loadData = async () => {
+      const success = await fetchDetallePrestamo(id);
+      if (!success) {
+        Alert.alert(
+          "Error",
+          "No se pudo cargar el detalle del préstamo (Sin permisos o no existe).",
+          [{ text: "Volver", onPress: () => navigation.goBack() }]
+        );
+      }
+    };
+
+    loadData();
+    
     return () => clearCurrentPrestamo();
   }, [id]);
 

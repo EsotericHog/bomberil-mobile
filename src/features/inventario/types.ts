@@ -173,6 +173,7 @@ export interface CrearPrestamoPayload {
   destinatario_id?: number;
   nuevo_destinatario_nombre?: string; // Opción para crear uno nuevo
   nuevo_destinatario_contacto?: string;
+  fecha_devolucion_esperada: string
   notas?: string;
   items: ItemPrestamoPayload[];
 }
